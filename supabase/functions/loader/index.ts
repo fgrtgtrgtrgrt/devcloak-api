@@ -35,9 +35,98 @@ function luaResponse(code: string): Response {
   });
 }
 
-// Multi-layer Lua obfuscation - executor compatible
-function obfuscateLua(code: string, options: { antiTamper: boolean; antiDump: boolean; antiHook: boolean }): string {
-  // Variable name obfuscation
+// LuaObfuscator.com API integration (free, no API key required with "test" key)
+const LUAOBFUSCATOR_API = "https://api.luaobfuscator.com/v1/obfuscator";
+
+interface ObfuscationResult {
+  success: boolean;
+  code: string;
+  error?: string;
+}
+
+// Call LuaObfuscator.com API for professional obfuscation
+async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
+  try {
+    // Step 1: Create a new session with the script
+    const sessionResponse = await fetch(`${LUAOBFUSCATOR_API}/newscript`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+        "apikey": "test",
+      },
+      body: code,
+    });
+
+    if (!sessionResponse.ok) {
+      console.error("[Obfuscator] Failed to create session:", sessionResponse.status);
+      return { success: false, code, error: "Failed to create obfuscation session" };
+    }
+
+    const sessionData = await sessionResponse.json();
+    
+    if (sessionData.message) {
+      console.error("[Obfuscator] Session error:", sessionData.message);
+      return { success: false, code, error: sessionData.message };
+    }
+
+    const sessionId = sessionData.sessionId;
+    if (!sessionId) {
+      console.error("[Obfuscator] No session ID returned");
+      return { success: false, code, error: "No session ID returned" };
+    }
+
+    // Step 2: Apply obfuscation with strong settings
+    const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": "test",
+        "sessionId": sessionId,
+      },
+      body: JSON.stringify({
+        // Variable/literal obfuscation
+        "MinifyAll": true,
+        "EncryptStrings": true,
+        
+        // Control flow obfuscation
+        "Virtualize": true,
+        
+        // Additional protection layers
+        "ConstantArray": true,
+        "ProxifyLocals": true,
+        "PaidWatermark": false,
+        "ByteCodeMode": "Default",
+      }),
+    });
+
+    if (!obfuscateResponse.ok) {
+      console.error("[Obfuscator] Failed to obfuscate:", obfuscateResponse.status);
+      return { success: false, code, error: "Failed to apply obfuscation" };
+    }
+
+    const obfuscateData = await obfuscateResponse.json();
+
+    if (obfuscateData.message) {
+      console.error("[Obfuscator] Obfuscation error:", obfuscateData.message);
+      return { success: false, code, error: obfuscateData.message };
+    }
+
+    if (!obfuscateData.code) {
+      console.error("[Obfuscator] No obfuscated code returned");
+      return { success: false, code, error: "No obfuscated code returned" };
+    }
+
+    console.log("[Obfuscator] Successfully obfuscated script via LuaObfuscator.com API");
+    return { success: true, code: obfuscateData.code };
+
+  } catch (error) {
+    console.error("[Obfuscator] API error:", error);
+    return { success: false, code, error: String(error) };
+  }
+}
+
+// Fallback local obfuscation if API fails
+function localObfuscate(code: string): string {
   const generateVarName = (): string => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let name = "_" + chars[Math.floor(Math.random() * 52)];
@@ -47,53 +136,42 @@ function obfuscateLua(code: string, options: { antiTamper: boolean; antiDump: bo
     return name;
   };
 
+  // Basic string encoding
+  const encodeString = (str: string): string => {
+    const key = Math.floor(Math.random() * 200) + 55;
+    const bytes = [];
+    for (let i = 0; i < str.length; i++) {
+      bytes.push(str.charCodeAt(i) ^ key);
+    }
+    return `(function(t,k) local r="" for i=1,#t do r=r..string.char(bit32 and bit32.bxor(t[i],k) or ((t[i]+256-k)%256)) end return r end)({${bytes.join(",")}},${key})`;
+  };
+
+  // Basic variable renaming
+  const varMap = new Map<string, string>();
+  const reserved = new Set(['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while', 'game', 'workspace', 'script', 'wait', 'spawn', 'task', 'pcall', 'print', 'warn', 'error', 'pairs', 'ipairs', 'tostring', 'tonumber', 'type', 'typeof', 'setmetatable', 'getmetatable', 'rawget', 'rawset', 'string', 'table', 'math', 'bit32', 'coroutine', 'Instance', 'Vector3', 'Vector2', 'CFrame', 'Color3', 'Enum', '_G', 'shared', 'loadstring', 'getfenv', 'setfenv']);
+
   let obfuscated = code;
 
-  // Anti-tamper check wrapper (lightweight, executor-safe)
-  if (options.antiTamper) {
-    const checkVar = generateVarName();
-    obfuscated = `
-local ${checkVar} = function()
-  local sum = 0
-  for i = 1, 100 do sum = sum + i end
-  return sum == 5050
-end
-if not ${checkVar}() then
-  warn("[ScriptHub] Integrity check failed")
-  return
-end
-${obfuscated}`;
+  // Find and rename local variables
+  const localPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  let match;
+  while ((match = localPattern.exec(code)) !== null) {
+    const varName = match[1];
+    if (!reserved.has(varName) && !varMap.has(varName)) {
+      varMap.set(varName, generateVarName());
+    }
   }
 
-  // Anti-dump protection (executor-safe version)
-  if (options.antiDump) {
-    const funcVar = generateVarName();
-    obfuscated = `
-local ${funcVar} = function()
-  local success, result = pcall(function()
-    if script and script:IsA("LocalScript") or script:IsA("Script") then
-      if script.Source and #script.Source > 0 then
-        return true
-      end
-    end
-  end)
-  return success and result
-end
-if ${funcVar}() then
-  warn("[ScriptHub] Protected script")
-end
-${obfuscated}`;
+  for (const [original, renamed] of varMap) {
+    const regex = new RegExp(`\\b${original}\\b`, 'g');
+    obfuscated = obfuscated.replace(regex, renamed);
   }
-
-  // Anti-hook detection - REMOVED as it causes issues with executors
-  // Executors wrap/hook standard Lua functions, causing false positives
 
   // Wrap in execution context
   const wrapperVar = generateVarName();
   const errVar = generateVarName();
-  const resultVar = generateVarName();
-  
-  return `-- ScriptHub Protected
+
+  return `-- ScriptHub Protected (Fallback)
 local ${wrapperVar}, ${errVar} = pcall(function()
 ${obfuscated}
 end)
@@ -413,7 +491,7 @@ Deno.serve(async (req) => {
     if (script.protection_mode === "keyless") {
       // Keyless scripts - allow access
       console.log(`[Loader] Keyless access granted for: ${scriptId}`);
-      const code = getExecutableCode(script, loaderUrl, scriptId);
+      const code = await getExecutableCode(script, loaderUrl, scriptId);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return luaResponse(code);
     }
@@ -435,7 +513,7 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[Loader] Whitelist access granted for: ${scriptId}`);
-      const code = getExecutableCode(script, loaderUrl, scriptId);
+      const code = await getExecutableCode(script, loaderUrl, scriptId);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return luaResponse(code);
     }
@@ -490,7 +568,7 @@ Deno.serve(async (req) => {
 
     // Return obfuscated script with embedded HWID handling
     console.log(`[Loader] Key access granted for: ${scriptId}`);
-    const code = getExecutableCode(script, loaderUrl, scriptId, {
+    const code = await getExecutableCode(script, loaderUrl, scriptId, {
       keyValue: scriptKey,
       hwidLockEnabled: key.hwid_lock_enabled
     });
@@ -504,13 +582,13 @@ Deno.serve(async (req) => {
   }
 });
 
-// Get executable code with HWID detection embedded
+// Get executable code with HWID detection embedded and API obfuscation
 interface KeyOptions {
   keyValue?: string;
   hwidLockEnabled?: boolean;
 }
 
-function getExecutableCode(script: any, loaderUrl: string, scriptId: string, keyOptions?: KeyOptions): string {
+async function getExecutableCode(script: any, loaderUrl: string, scriptId: string, keyOptions?: KeyOptions): Promise<string> {
   // Generate random variable names to hide the HWID detection
   const generateVarName = (): string => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -530,8 +608,20 @@ function getExecutableCode(script: any, loaderUrl: string, scriptId: string, key
   const verifyVar = generateVarName();
   const resultVar = generateVarName();
 
-  // Use obfuscated code if available, otherwise original
-  const scriptCode = script.obfuscated_code || script.original_code;
+  // Get the script code - prefer obfuscated if available
+  let scriptCode = script.obfuscated_code || script.original_code;
+
+  // If no pre-obfuscated code, obfuscate now via API
+  if (!script.obfuscated_code && script.original_code) {
+    console.log("[Loader] Obfuscating script via LuaObfuscator.com API...");
+    const obfResult = await obfuscateWithAPI(script.original_code);
+    if (obfResult.success) {
+      scriptCode = obfResult.code;
+    } else {
+      console.log("[Loader] API obfuscation failed, using local fallback");
+      scriptCode = localObfuscate(script.original_code);
+    }
+  }
 
   // Build HWID verification code for key-protected scripts with HWID lock
   let hwidVerification = "";
@@ -557,7 +647,7 @@ end
   }
 
   // Embed HWID detection directly into the script - hidden among obfuscated variable names
-  return `-- ScriptHub Protected
+  const wrapperCode = `-- ScriptHub Protected
 local ${gameVar} = game
 local ${httpVar} = ${gameVar}:GetService("HttpService")
 local ${playerVar} = ${gameVar}:GetService("Players").LocalPlayer
@@ -590,13 +680,8 @@ end)
 if not ${successVar} then
   warn("[ScriptHub] Runtime error: " .. tostring(${errorVar}))
 end`;
-}
 
-// Update the function calls to use the new signature
-function getExecutableCodeWithUrl(script: any, req: Request): string {
-  const url = new URL(req.url);
-  const loaderUrl = `${url.origin}${url.pathname}`;
-  return getExecutableCode(script, loaderUrl, script.id);
+  return wrapperCode;
 }
 
 async function logExecution(

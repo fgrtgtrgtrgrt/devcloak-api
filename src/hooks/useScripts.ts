@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
-import { obfuscateLua } from "@/lib/obfuscate";
+import { obfuscateLuaAsync } from "@/lib/obfuscate";
 
 export interface Script {
   id: string;
@@ -104,7 +104,7 @@ export function useScripts() {
     }
 
     try {
-      const obfuscated = obfuscateLua(code, {
+      const obfuscated = await obfuscateLuaAsync(code, {
         antiTamper: options.antiTamper ?? true,
         antiDump: options.antiDump ?? true,
         antiHook: options.antiHook ?? true,
@@ -149,7 +149,7 @@ export function useScripts() {
         const script = scripts.find(s => s.id === id);
         if (script) {
           const code = updates.original_code || script.original_code;
-          finalUpdates.obfuscated_code = obfuscateLua(code, {
+          finalUpdates.obfuscated_code = await obfuscateLuaAsync(code, {
             antiTamper: updates.anti_tamper ?? script.anti_tamper,
             antiDump: updates.anti_dump ?? script.anti_dump,
             antiHook: updates.anti_hook ?? script.anti_hook,

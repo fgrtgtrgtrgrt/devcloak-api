@@ -1,6 +1,7 @@
-// Advanced multi-layer Lua obfuscation - Executor compatible
+// LuaObfuscator.com API integration - free obfuscation
+const LUAOBFUSCATOR_API = "https://api.luaobfuscator.com/v1/obfuscator";
 
-// Generate random variable name
+// Generate random variable name (for fallback)
 export function generateVarName(prefix = "_"): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   let name = prefix + chars[Math.floor(Math.random() * 52)];
@@ -10,60 +11,105 @@ export function generateVarName(prefix = "_"): string {
   return name;
 }
 
-// Generate random number for encoding
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+interface ObfuscationResult {
+  success: boolean;
+  code: string;
+  error?: string;
 }
 
-// XOR key for string encoding
-function generateXorKey(): number {
-  return randomInt(1, 255);
-}
+// Call LuaObfuscator.com API for professional obfuscation
+export async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
+  try {
+    // Step 1: Create a new session with the script
+    const sessionResponse = await fetch(`${LUAOBFUSCATOR_API}/newscript`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+        "apikey": "test",
+      },
+      body: code,
+    });
 
-// Encode a string to byte array with XOR
-function encodeString(str: string, key: number): number[] {
-  const bytes: number[] = [];
-  for (let i = 0; i < str.length; i++) {
-    bytes.push(str.charCodeAt(i) ^ key);
-  }
-  return bytes;
-}
-
-// Generate string decoder function in Lua
-function generateStringDecoder(decoderVar: string, keyVar: string): string {
-  return `local ${decoderVar} = function(t, k)
-  local r = ""
-  for i = 1, #t do
-    r = r .. string.char(bit32 and bit32.bxor(t[i], k) or ((t[i] + k) % 256))
-  end
-  return r
-end`;
-}
-
-// Obfuscate all string literals in the code
-function obfuscateStrings(code: string, decoderVar: string, keyVar: string, key: number): string {
-  // Match string literals (single, double quotes, and long strings)
-  const stringPattern = /(?<!\\)(["'])(?:(?!\1|\\).|\\.)*\1/g;
-  
-  return code.replace(stringPattern, (match) => {
-    // Extract the string content without quotes
-    const quote = match[0];
-    const content = match.slice(1, -1);
-    
-    // Skip very short strings or strings with escape sequences we can't handle
-    if (content.length < 2 || content.includes('\\')) {
-      return match;
+    if (!sessionResponse.ok) {
+      console.error("[Obfuscator] Failed to create session:", sessionResponse.status);
+      return { success: false, code, error: "Failed to create obfuscation session" };
     }
+
+    const sessionData = await sessionResponse.json();
     
-    // Encode the string
-    const encoded = encodeString(content, key);
-    return `${decoderVar}({${encoded.join(",")}}, ${keyVar})`;
-  });
+    if (sessionData.message) {
+      console.error("[Obfuscator] Session error:", sessionData.message);
+      return { success: false, code, error: sessionData.message };
+    }
+
+    const sessionId = sessionData.sessionId;
+    if (!sessionId) {
+      console.error("[Obfuscator] No session ID returned");
+      return { success: false, code, error: "No session ID returned" };
+    }
+
+    // Step 2: Apply obfuscation with strong settings
+    const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": "test",
+        "sessionId": sessionId,
+      },
+      body: JSON.stringify({
+        // Variable/literal obfuscation
+        "MinifyAll": true,
+        "EncryptStrings": true,
+        
+        // Control flow obfuscation  
+        "Virtualize": true,
+        
+        // Additional protection layers
+        "ConstantArray": true,
+        "ProxifyLocals": true,
+        "PaidWatermark": false,
+        "ByteCodeMode": "Default",
+      }),
+    });
+
+    if (!obfuscateResponse.ok) {
+      console.error("[Obfuscator] Failed to obfuscate:", obfuscateResponse.status);
+      return { success: false, code, error: "Failed to apply obfuscation" };
+    }
+
+    const obfuscateData = await obfuscateResponse.json();
+
+    if (obfuscateData.message) {
+      console.error("[Obfuscator] Obfuscation error:", obfuscateData.message);
+      return { success: false, code, error: obfuscateData.message };
+    }
+
+    if (!obfuscateData.code) {
+      console.error("[Obfuscator] No obfuscated code returned");
+      return { success: false, code, error: "No obfuscated code returned" };
+    }
+
+    console.log("[Obfuscator] Successfully obfuscated script via LuaObfuscator.com API");
+    return { success: true, code: obfuscateData.code };
+
+  } catch (error) {
+    console.error("[Obfuscator] API error:", error);
+    return { success: false, code, error: String(error) };
+  }
 }
 
-// Rename local variables to random names
-function renameVariables(code: string): { code: string; mapping: Map<string, string> } {
-  const mapping = new Map<string, string>();
+// Fallback local obfuscation if API fails
+function localObfuscate(code: string): string {
+  // Basic string encoding
+  const encodeString = (str: string, key: number): number[] => {
+    const bytes: number[] = [];
+    for (let i = 0; i < str.length; i++) {
+      bytes.push(str.charCodeAt(i) ^ key);
+    }
+    return bytes;
+  };
+
+  // Reserved Lua keywords and Roblox globals
   const reserved = new Set([
     'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function',
     'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true',
@@ -78,14 +124,16 @@ function renameVariables(code: string): { code: string; mapping: Map<string, str
     'shared', 'loadstring', 'getfenv', 'setfenv', 'newproxy'
   ]);
 
-  // Find local variable declarations
+  let obfuscated = code;
+  const varMap = new Map<string, string>();
+
+  // Find and rename local variables
   const localPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
   let match;
-  
   while ((match = localPattern.exec(code)) !== null) {
     const varName = match[1];
-    if (!reserved.has(varName) && !mapping.has(varName)) {
-      mapping.set(varName, generateVarName("_v"));
+    if (!reserved.has(varName) && !varMap.has(varName)) {
+      varMap.set(varName, generateVarName("_v"));
     }
   }
 
@@ -96,203 +144,29 @@ function renameVariables(code: string): { code: string; mapping: Map<string, str
     if (params && params[1]) {
       const paramNames = params[1].split(',').map(p => p.trim()).filter(p => p);
       for (const param of paramNames) {
-        if (!reserved.has(param) && !mapping.has(param)) {
-          mapping.set(param, generateVarName("_p"));
+        if (!reserved.has(param) && !varMap.has(param)) {
+          varMap.set(param, generateVarName("_p"));
         }
       }
     }
   }
 
-  // Apply renaming
-  let result = code;
-  for (const [original, renamed] of mapping) {
+  // Apply variable renaming
+  for (const [original, renamed] of varMap) {
     const regex = new RegExp(`\\b${original}\\b`, 'g');
-    result = result.replace(regex, renamed);
+    obfuscated = obfuscated.replace(regex, renamed);
   }
 
-  return { code: result, mapping };
-}
+  // Wrap in execution context with pcall
+  const wrapperVar = generateVarName("_w");
+  const errVar = generateVarName("_e");
 
-// Insert dead code blocks
-function insertDeadCode(code: string): string {
-  const deadCodeBlocks = [
-    () => {
-      const v1 = generateVarName("_d");
-      const v2 = generateVarName("_d");
-      return `local ${v1} = ${randomInt(1, 1000)}; local ${v2} = ${v1} * 0;`;
-    },
-    () => {
-      const v = generateVarName("_d");
-      return `if false then local ${v} = nil end`;
-    },
-    () => {
-      const v = generateVarName("_d");
-      return `local ${v} = (function() return nil end)()`;
-    },
-    () => {
-      const v1 = generateVarName("_d");
-      const v2 = generateVarName("_d");
-      return `local ${v1}, ${v2} = ${randomInt(1, 100)}, ${randomInt(1, 100)}`;
-    }
-  ];
-
-  const lines = code.split('\n');
-  const result: string[] = [];
-  
-  for (const line of lines) {
-    result.push(line);
-    // Randomly insert dead code (10% chance per line)
-    if (Math.random() < 0.1 && line.trim().length > 0) {
-      const deadCode = deadCodeBlocks[randomInt(0, deadCodeBlocks.length - 1)]();
-      result.push(deadCode);
-    }
-  }
-
-  return result.join('\n');
-}
-
-// Control flow flattening using state machine
-function flattenControlFlow(code: string): string {
-  const stateVar = generateVarName("_st");
-  const loopVar = generateVarName("_lp");
-  const resultVar = generateVarName("_rs");
-  
-  // Wrap the entire code in a state machine
-  return `local ${stateVar} = 1
-local ${resultVar} = nil
-local ${loopVar} = true
-while ${loopVar} do
-  if ${stateVar} == 1 then
-    ${stateVar} = 2
-  elseif ${stateVar} == 2 then
-    local _exec = function()
-${code}
-    end
-    ${resultVar} = {pcall(_exec)}
-    ${stateVar} = 3
-  elseif ${stateVar} == 3 then
-    ${loopVar} = false
-  end
-end
-if not ${resultVar}[1] then
-  warn("[Protected] " .. tostring(${resultVar}[2]))
-end`;
-}
-
-// Generate integrity check
-function generateIntegrityCheck(): string {
-  const checkVar = generateVarName("_ic");
-  const sumVar = generateVarName("_sm");
-  const expected = 5050; // Sum of 1 to 100
-  
-  return `local ${checkVar} = function()
-  local ${sumVar} = 0
-  for i = 1, 100 do ${sumVar} = ${sumVar} + i end
-  return ${sumVar} == ${expected}
-end
-if not ${checkVar}() then return end`;
-}
-
-// Generate anti-tamper protection
-function generateAntiTamper(): string {
-  const funcVar = generateVarName("_at");
-  const checkVar = generateVarName("_ck");
-  
-  return `local ${funcVar} = function()
-  local ${checkVar} = true
-  local _s, _e = pcall(function()
-    if getfenv then
-      local env = getfenv(0)
-      if env and type(env) == "table" then
-        for k, v in pairs(env) do
-          if type(v) == "function" then
-            local info = debug and debug.getinfo and debug.getinfo(v)
-            if info and info.what == "C" then
-              ${checkVar} = ${checkVar} and true
-            end
-          end
-        end
-      end
-    end
-  end)
-  return ${checkVar}
-end
-if not ${funcVar}() then
-  warn("[Protected] Environment check failed")
-end`;
-}
-
-// Generate anti-dump protection
-function generateAntiDump(): string {
-  const funcVar = generateVarName("_ad");
-  
-  return `local ${funcVar} = function()
-  local _s, _r = pcall(function()
-    if script and typeof(script) == "Instance" then
-      if script:IsA("LocalScript") or script:IsA("ModuleScript") or script:IsA("Script") then
-        local src = script:FindFirstChild("Source") or script:FindFirstChild("source")
-        if src then return true end
-      end
-    end
-  end)
-  return _s and _r
-end
-if ${funcVar}() then
-  warn("[Protected] Script protection active")
-end`;
-}
-
-// Generate metatable protection check
-function generateMetatableProtection(): string {
-  const checkVar = generateVarName("_mt");
-  
-  return `local ${checkVar} = function()
-  local _ok = true
-  pcall(function()
-    local _t = {}
-    local _mt = {__index = function() return nil end}
-    setmetatable(_t, _mt)
-    local _g = getmetatable(_t)
-    if _g ~= _mt then _ok = false end
-  end)
-  return _ok
-end
-if not ${checkVar}() then
-  warn("[Protected] Metatable tampering detected")
-end`;
-}
-
-// Wrap code in multiple closure layers
-function wrapInClosures(code: string, layers: number = 3): string {
-  let result = code;
-  
-  for (let i = 0; i < layers; i++) {
-    const funcVar = generateVarName("_cl");
-    const argsVar = generateVarName("_ag");
-    result = `local ${funcVar} = (function(${argsVar})
-  return (function()
-${result}
-  end)()
-end)({${randomInt(1, 100)}, ${randomInt(1, 100)}, ${randomInt(1, 100)}})`;
-  }
-  
-  return result;
-}
-
-// Generate environment sandbox
-function generateSandbox(): string {
-  const envVar = generateVarName("_env");
-  const proxyVar = generateVarName("_px");
-  
-  return `local ${envVar} = getfenv and getfenv() or _ENV or {}
-local ${proxyVar} = setmetatable({}, {
-  __index = ${envVar},
-  __newindex = function(t, k, v)
-    rawset(${envVar}, k, v)
-  end
-})
-if setfenv then
-  pcall(setfenv, 1, ${proxyVar})
+  return `-- ScriptHub Protected (Fallback)
+local ${wrapperVar}, ${errVar} = pcall(function()
+${obfuscated}
+end)
+if not ${wrapperVar} then
+  warn("[ScriptHub] Error: " .. tostring(${errVar}))
 end`;
 }
 
@@ -308,93 +182,23 @@ interface ObfuscationOptions {
   metatableProtection?: boolean;
 }
 
-export function obfuscateLua(code: string, options: ObfuscationOptions = {}): string {
-  const {
-    antiTamper = true,
-    antiDump = true,
-    antiHook = true,
-    stringEncryption = true,
-    variableRenaming = true,
-    deadCodeInsertion = true,
-    controlFlowFlattening = true,
-    closureWrapping = true,
-    metatableProtection = true,
-  } = options;
-
-  let obfuscated = code;
-
-  // Step 1: String encryption
-  const xorKey = generateXorKey();
-  const keyVar = generateVarName("_k");
-  const decoderVar = generateVarName("_dec");
+// Main obfuscation function - tries API first, falls back to local
+export async function obfuscateLuaAsync(code: string, _options: ObfuscationOptions = {}): Promise<string> {
+  // Try API obfuscation first
+  const result = await obfuscateWithAPI(code);
   
-  let stringDecoder = "";
-  if (stringEncryption) {
-    stringDecoder = generateStringDecoder(decoderVar, keyVar);
-    obfuscated = obfuscateStrings(obfuscated, decoderVar, keyVar, xorKey);
-  }
-
-  // Step 2: Variable renaming
-  if (variableRenaming) {
-    const { code: renamed } = renameVariables(obfuscated);
-    obfuscated = renamed;
-  }
-
-  // Step 3: Dead code insertion
-  if (deadCodeInsertion) {
-    obfuscated = insertDeadCode(obfuscated);
-  }
-
-  // Step 4: Build protection layers
-  const protections: string[] = [];
-  
-  protections.push(generateIntegrityCheck());
-  
-  if (antiTamper) {
-    protections.push(generateAntiTamper());
+  if (result.success) {
+    return result.code;
   }
   
-  if (antiDump) {
-    protections.push(generateAntiDump());
-  }
-  
-  if (metatableProtection && antiHook) {
-    protections.push(generateMetatableProtection());
-  }
-  
-  // Add sandbox
-  protections.push(generateSandbox());
-  
-  // Add string decoder if used
-  if (stringEncryption) {
-    protections.push(`local ${keyVar} = ${xorKey}`);
-    protections.push(stringDecoder);
-  }
+  // Fall back to local obfuscation
+  console.log("[Obfuscator] API failed, using local fallback");
+  return localObfuscate(code);
+}
 
-  // Combine protections with main code
-  obfuscated = protections.join('\n') + '\n' + obfuscated;
-
-  // Step 5: Control flow flattening
-  if (controlFlowFlattening) {
-    obfuscated = flattenControlFlow(obfuscated);
-  }
-
-  // Step 6: Wrap in closure layers
-  if (closureWrapping) {
-    obfuscated = wrapInClosures(obfuscated, 2);
-  }
-
-  // Final wrapper with pcall
-  const wrapperVar = generateVarName("_w");
-  const errVar = generateVarName("_e");
-  
-  return `-- Protected Script
-local ${wrapperVar}, ${errVar} = pcall(function()
-${obfuscated}
-end)
-if not ${wrapperVar} then
-  warn("[ScriptHub] " .. tostring(${errVar}))
-end`;
+// Synchronous fallback for existing code that can't be async
+export function obfuscateLua(code: string, _options: ObfuscationOptions = {}): string {
+  return localObfuscate(code);
 }
 
 // Preview obfuscation (lighter version for display)
