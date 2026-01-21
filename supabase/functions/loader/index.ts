@@ -83,7 +83,8 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
 
     console.log("[Obfuscator] Session created, applying obfuscation...");
 
-    // Step 2: Apply obfuscation with strong settings (per docs format)
+    // Step 2: Apply obfuscation with Roblox-compatible settings
+    // IMPORTANT: Do NOT use "Virtualize" - it generates Lua 5.1 bytecode incompatible with Roblox's Luau
     const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
       method: "POST",
       headers: {
@@ -92,34 +93,25 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
         "sessionId": sessionId,
       },
       body: JSON.stringify({
-        // Minify everything
+        // Minify code
         "MinifiyAll": true,
         
-        // Virtualization - converts to bytecode VM
-        "Virtualize": true,
-        
-        // Custom plugins for advanced protection
+        // Custom plugins for Roblox-compatible protection
         "CustomPlugins": {
-          // Encrypt all strings with XOR
-          "EncryptStrings": [100],
+          // String encryption (moderate level to avoid issues)
+          "EncryptStrings": [80],
           
-          // Control flow obfuscation
-          "ControlFlowFlattenV1AllBlocks": [80],
+          // Control flow obfuscation (moderate)
+          "ControlFlowFlattenV1AllBlocks": [60],
           
           // Variable renaming
           "Minifier": true,
           
-          // Turn globals into lookups
-          "MakeGlobalsLookups": true,
-          
           // Swizzle lookups (foo.bar -> foo['bar'])
-          "SwizzleLookups": [100],
+          "SwizzleLookups": [80],
           
-          // Mutate literals into expressions
-          "MutateAllLiterals": [80],
-          
-          // Inject opaque conditions
-          "JunkifyAllIfStatements": [50]
+          // Mutate literals into expressions (low to prevent issues)
+          "MutateAllLiterals": [40]
         }
       }),
     });
