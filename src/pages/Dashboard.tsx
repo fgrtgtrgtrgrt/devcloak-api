@@ -3,19 +3,22 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Plus, Code, Key, Users, CheckCircle } from "lucide-react";
-import { useScripts } from "@/hooks/useScripts";
+import { useScripts, Script } from "@/hooks/useScripts";
 import { ScriptCard } from "@/components/dashboard/ScriptCard";
 import { ScriptLoader } from "@/components/dashboard/ScriptLoader";
 import { KeyManager } from "@/components/dashboard/KeyManager";
 import { WhitelistManager } from "@/components/dashboard/WhitelistManager";
-import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
+import { BlacklistManager } from "@/components/dashboard/BlacklistManager";
+import { ExecutionLogs } from "@/components/dashboard/ExecutionLogs";
 import { CreateScriptModal } from "@/components/dashboard/CreateScriptModal";
+import { ScriptSettingsModal } from "@/components/dashboard/ScriptSettingsModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Dashboard = () => {
   const { scripts, loading, createScript, updateScript, deleteScript } = useScripts();
   const [showNewScript, setShowNewScript] = useState(false);
   const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null);
+  const [settingsScript, setSettingsScript] = useState<Script | null>(null);
 
   const selectedScript = scripts.find((s) => s.id === selectedScriptId);
 
@@ -31,9 +34,14 @@ const Dashboard = () => {
     }
   };
 
-  // Calculate stats
-  const totalKeys = 0; // Will be calculated when keys are loaded
-  const totalExecutions = 0;
+  const handleSettings = (script: Script) => {
+    setSettingsScript(script);
+  };
+
+  const handleSaveSettings = async (updates: Partial<Script>) => {
+    if (!settingsScript) return false;
+    return await updateScript(settingsScript.id, updates);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -102,7 +110,7 @@ const Dashboard = () => {
                     onSelect={setSelectedScriptId}
                     onDelete={deleteScript}
                     onToggleActive={(id, isActive) => updateScript(id, { is_active: isActive })}
-                    onSettings={() => {}}
+                    onSettings={handleSettings}
                   />
                 ))}
               </div>
@@ -114,10 +122,11 @@ const Dashboard = () => {
                     <ScriptLoader script={selectedScript} />
                     
                     <Tabs defaultValue="keys" className="w-full">
-                      <TabsList className="grid w-full grid-cols-3">
+                      <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="keys">Keys</TabsTrigger>
                         <TabsTrigger value="whitelist">Whitelist</TabsTrigger>
-                        <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                        <TabsTrigger value="blacklist">Blacklist</TabsTrigger>
+                        <TabsTrigger value="logs">Logs</TabsTrigger>
                       </TabsList>
                       <TabsContent value="keys" className="mt-4">
                         <KeyManager scriptId={selectedScript.id} />
@@ -125,8 +134,11 @@ const Dashboard = () => {
                       <TabsContent value="whitelist" className="mt-4">
                         <WhitelistManager scriptId={selectedScript.id} />
                       </TabsContent>
-                      <TabsContent value="analytics" className="mt-4">
-                        <AnalyticsPanel scriptId={selectedScript.id} />
+                      <TabsContent value="blacklist" className="mt-4">
+                        <BlacklistManager scriptId={selectedScript.id} />
+                      </TabsContent>
+                      <TabsContent value="logs" className="mt-4">
+                        <ExecutionLogs scriptId={selectedScript.id} />
                       </TabsContent>
                     </Tabs>
                   </>
@@ -144,6 +156,14 @@ const Dashboard = () => {
 
       {showNewScript && (
         <CreateScriptModal onClose={() => setShowNewScript(false)} onCreate={handleCreate} />
+      )}
+
+      {settingsScript && (
+        <ScriptSettingsModal
+          script={settingsScript}
+          onClose={() => setSettingsScript(null)}
+          onSave={handleSaveSettings}
+        />
       )}
 
       <Footer />
