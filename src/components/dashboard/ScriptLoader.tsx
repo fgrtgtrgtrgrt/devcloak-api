@@ -12,7 +12,8 @@ export function ScriptLoader({ script }: ScriptLoaderProps) {
   // NOTE: some executors use a generic browser UA and may get redirected (302),
   // which makes HttpGet return nil in some environments. raw=1 forces Lua output.
   const baseLoaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${script.id}?raw=1`;
-  // Display friendly URL for users to share
+  // Browser-friendly URL (renders the Access Denied / copy UI)
+  // NOTE: This is NOT an executor endpoint.
   const displayUrl = `${window.location.origin}/loader/${script.id}`;
 
   const copyLoader = () => {
@@ -74,9 +75,14 @@ loadstring(game:HttpGet("${baseLoaderUrl}&key=" .. key))()`;
       <div className="code-block text-xs overflow-x-auto">
         <code>{getLoaderPreview()}</code>
       </div>
-      <p className="text-xs text-muted-foreground mt-3 mb-2">
-        Share this link: <a href={displayUrl} target="_blank" className="text-primary hover:underline">{displayUrl}</a>
-      </p>
+      <div className="mt-3 space-y-1 text-xs">
+        <p className="text-muted-foreground">
+          Executor URL: <span className="text-foreground break-all">{baseLoaderUrl}</span>
+        </p>
+        <p className="text-muted-foreground">
+          Browser page: <a href={displayUrl} target="_blank" className="text-primary hover:underline break-all">{displayUrl}</a>
+        </p>
+      </div>
       <Button variant="outline" className="w-full mt-2" onClick={copyLoader}>
         <Copy className="w-4 h-4" />
         Copy Loader

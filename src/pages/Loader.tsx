@@ -10,8 +10,11 @@ export default function Loader() {
   const loaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${scriptId}?raw=1`;
   
   const copyLoader = () => {
-    const loader = `getgenv().SCRIPT_KEY = "YOUR_KEY_HERE"
-loadstring(game:HttpGet("${loaderUrl}"))()`;
+    // Works for all modes:
+    // - keyless/whitelist ignore &key=
+    // - key mode requires &key=...
+    const loader = `local key = (getgenv and getgenv().SCRIPT_KEY) or "YOUR_KEY_HERE"
+loadstring(game:HttpGet("${loaderUrl}&key=" .. tostring(key)))()`;
     navigator.clipboard.writeText(loader);
     toast.success("Loader copied to clipboard!");
   };
