@@ -644,19 +644,15 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
   const verifyVar = generateVarName();
   const resultVar = generateVarName();
 
-  // Get the script code - prefer obfuscated if available
-  let scriptCode = script.obfuscated_code || script.original_code;
+  // Get the script code
+  // IMPORTANT: Older stored obfuscated_code may have been produced with aggressive settings that
+  // break complex Luau scripts ("attempt to call nil"). For maximum compatibility we prefer
+  // original_code and only fall back to stored obfuscated_code if original_code is missing.
+  let scriptCode = script.original_code || script.obfuscated_code;
 
-  // If no pre-obfuscated code, obfuscate now via API
-  if (!script.obfuscated_code && script.original_code) {
-    console.log("[Loader] Obfuscating script via LuaObfuscator.com API...");
-    const obfResult = await obfuscateWithAPI(script.original_code);
-    if (obfResult.success) {
-      scriptCode = obfResult.code;
-    } else {
-      console.log("[Loader] API obfuscation failed, using local fallback");
-      scriptCode = localObfuscate(script.original_code);
-    }
+  // If we still don't have code, stop.
+  if (!scriptCode || typeof scriptCode !== "string" || !scriptCode.trim()) {
+    return getLuaError("Script is missing code");
   }
 
   // Simplified wrapper - minimal code to avoid executor compatibility issues
