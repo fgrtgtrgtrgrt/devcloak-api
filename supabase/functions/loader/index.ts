@@ -83,12 +83,14 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
 
     console.log("[Obfuscator] Session created, applying obfuscation...");
 
-    // Step 2: Apply SAFE obfuscation - minimal settings to prevent "nil" errors in complex scripts
-    // CRITICAL: Avoid aggressive transforms that break Roblox's Luau runtime:
-    // - NO Virtualize (Lua 5.1 bytecode, incompatible)
-    // - NO ControlFlowFlatten (breaks complex script logic)
-    // - NO MakeGlobalsLookups (breaks global function calls)
-    // - NO MutateAllLiterals (can break numeric comparisons)
+    // Step 2: Apply STRONG but Roblox-compatible obfuscation
+    // These settings provide real protection against loadstring hooks while staying Luau-safe:
+    // ✅ EncryptStrings - XOR-encrypts all strings (prevents easy string extraction)
+    // ✅ SwizzleLookups - converts foo.bar to foo["bar"] (harder to read)
+    // ✅ ControlFlowFlatten - scrambles code flow (moderate level to avoid breaking complex scripts)
+    // ✅ Minifier - renames all variables to v0, v1, etc.
+    // ❌ NO Virtualize - generates Lua 5.1 bytecode incompatible with Luau
+    // ❌ NO MakeGlobalsLookups - breaks _G/shared access in some executors
     const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
       method: "POST",
       headers: {
@@ -97,13 +99,23 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
         "sessionId": sessionId,
       },
       body: JSON.stringify({
-        // Only minify - safest option that still provides protection
         "MinifiyAll": true,
         
-        // Minimal safe plugins only
         "CustomPlugins": {
-          // Variable/function renaming only - very safe
-          "Minifier": true
+          // Strong string encryption - prevents easy extraction
+          "EncryptStrings": [90],
+          
+          // Control flow obfuscation - moderate level for compatibility
+          "ControlFlowFlattenV1AllBlocks": [50],
+          
+          // Variable/function renaming
+          "Minifier": true,
+          
+          // Property access obfuscation
+          "SwizzleLookups": [90],
+          
+          // Literal mutation - low level for safety
+          "MutateAllLiterals": [30]
         }
       }),
     });
@@ -644,15 +656,23 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
   const verifyVar = generateVarName();
   const resultVar = generateVarName();
 
-  // Get the script code
-  // IMPORTANT: Older stored obfuscated_code may have been produced with aggressive settings that
-  // break complex Luau scripts ("attempt to call nil"). For maximum compatibility we prefer
-  // original_code and only fall back to stored obfuscated_code if original_code is missing.
-  let scriptCode = script.original_code || script.obfuscated_code;
-
-  // If we still don't have code, stop.
-  if (!scriptCode || typeof scriptCode !== "string" || !scriptCode.trim()) {
+  // Get the original code and obfuscate it on-the-fly for strong protection
+  const originalCode = script.original_code;
+  
+  if (!originalCode || typeof originalCode !== "string" || !originalCode.trim()) {
     return getLuaError("Script is missing code");
+  }
+  
+  // Always obfuscate on delivery to prevent loadstring hook interception
+  console.log("[Loader] Obfuscating script via LuaObfuscator.com API...");
+  let scriptCode: string;
+  const obfResult = await obfuscateWithAPI(originalCode);
+  if (obfResult.success) {
+    scriptCode = obfResult.code;
+    console.log("[Loader] Obfuscation successful, output length:", scriptCode.length);
+  } else {
+    console.log("[Loader] API obfuscation failed, using local fallback");
+    scriptCode = localObfuscate(originalCode);
   }
 
   // Simplified wrapper - minimal code to avoid executor compatibility issues

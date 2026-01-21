@@ -202,11 +202,15 @@ Deno.serve(async (req) => {
 
     const apiKey = Deno.env.get("LUAOBFUSCATOR_API_KEY") || "test";
 
-    // Safe Roblox-compatible config
+    // Strong but Roblox-compatible obfuscation config
     const defaultConfig = {
       MinifiyAll: true,
       CustomPlugins: {
-        Minifier: true
+        EncryptStrings: [90],
+        ControlFlowFlattenV1AllBlocks: [50],
+        Minifier: true,
+        SwizzleLookups: [90],
+        MutateAllLiterals: [30]
       }
     };
     const config = body.config ?? defaultConfig;
