@@ -352,13 +352,17 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const pathParts = url.pathname.split("/").filter(Boolean);
+  // Force Lua response even if user-agent looks like a browser.
+  // Some executors use a generic UA (e.g. Mozilla/5.0) and may receive a 302,
+  // causing HttpGet(...) to return nil and breaking loadstring.
+  const forceLua = url.searchParams.get("raw") === "1" || url.searchParams.get("lua") === "1";
   
   // Expected path: /loader/{script_id}
   const scriptId = pathParts[pathParts.length - 1];
   
   if (!scriptId || scriptId === "loader") {
     const userAgent = req.headers.get("user-agent");
-    if (!isRobloxRequest(userAgent)) {
+    if (!forceLua && !isRobloxRequest(userAgent)) {
       // Browser: send to the real website page instead of returning raw HTML
       return redirectToLoaderPage(req);
     }
@@ -471,7 +475,7 @@ Deno.serve(async (req) => {
   }
 
   // If not from Roblox, show access denied page
-  if (!isRobloxRequest(userAgent)) {
+  if (!forceLua && !isRobloxRequest(userAgent)) {
     // Browser: always route to the website's Loader page (renders Access Denied UI)
     return redirectToLoaderPage(req, scriptId);
   }

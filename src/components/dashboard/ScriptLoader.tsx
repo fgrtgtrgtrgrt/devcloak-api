@@ -9,7 +9,9 @@ interface ScriptLoaderProps {
 
 export function ScriptLoader({ script }: ScriptLoaderProps) {
   // Use Supabase edge function URL for actual loader (Roblox needs this)
-  const baseLoaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${script.id}`;
+  // NOTE: some executors use a generic browser UA and may get redirected (302),
+  // which makes HttpGet return nil in some environments. raw=1 forces Lua output.
+  const baseLoaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${script.id}?raw=1`;
   // Display friendly URL for users to share
   const displayUrl = `${window.location.origin}/loader/${script.id}`;
 
@@ -20,7 +22,7 @@ export function ScriptLoader({ script }: ScriptLoaderProps) {
       // For key-protected scripts, key is passed in URL - HWID is grabbed inside the script
       loader = `local key = "YOUR_KEY_HERE" -- Replace with your actual key
 
-loadstring(game:HttpGet("${baseLoaderUrl}?key=" .. key))()`;
+loadstring(game:HttpGet("${baseLoaderUrl}&key=" .. key))()`;
     } else {
       // For whitelist and keyless - HWID detection is embedded in the script itself
       loader = `loadstring(game:HttpGet("${baseLoaderUrl}"))()`;
