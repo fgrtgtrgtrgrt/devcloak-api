@@ -644,36 +644,44 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
   
   let scriptCode: string;
   
-  // Check if we have cached obfuscated code (and it's not from old aggressive settings)
-  // We use a simple heuristic: if obfuscated_code exists and is longer than original, use it
-  if (script.obfuscated_code && typeof script.obfuscated_code === "string" && 
-      script.obfuscated_code.length > originalCode.length) {
+  // If we already have cached output, always prefer it.
+  // (Our minimal obfuscation can be smaller than the original due to minification.)
+  if (script.obfuscated_code && typeof script.obfuscated_code === "string" && script.obfuscated_code.trim()) {
     console.log("[Loader] Using cached obfuscated code, length:", script.obfuscated_code.length);
     scriptCode = script.obfuscated_code;
   } else {
-    // Obfuscate via API
-    console.log("[Loader] Obfuscating script via LuaObfuscator.com API...");
-    const obfResult = await obfuscateWithAPI(originalCode);
-    
-    if (obfResult.success) {
-      scriptCode = obfResult.code;
-      console.log("[Loader] Obfuscation successful, output length:", scriptCode.length);
-      
-      // Cache the obfuscated code in database for future requests (avoids rate limiting)
-      if (supabase) {
-        try {
-          await supabase
-            .from("scripts")
-            .update({ obfuscated_code: scriptCode })
-            .eq("id", scriptId);
-          console.log("[Loader] Cached obfuscated code to database");
-        } catch (e) {
-          console.error("[Loader] Failed to cache obfuscated code:", e);
-        }
-      }
+    // Allow bypassing obfuscation for debugging / compatibility
+    if (loaderUrl.includes("no_obfuscate=1") || loaderUrl.includes("plain=1")) {
+      console.log("[Loader] no_obfuscate=1 set; serving original code");
+      scriptCode = originalCode;
     } else {
-      console.log("[Loader] API obfuscation failed, using local fallback");
-      scriptCode = localObfuscate(originalCode);
+      // Obfuscate via API
+      console.log("[Loader] Obfuscating script via LuaObfuscator.com API...");
+      const obfResult = await obfuscateWithAPI(originalCode);
+
+      if (obfResult.success) {
+        scriptCode = obfResult.code;
+        console.log("[Loader] Obfuscation successful, output length:", scriptCode.length);
+
+        // Cache the obfuscated code in database for future requests (avoids rate limiting)
+        if (supabase) {
+          try {
+            await supabase
+              .from("scripts")
+              .update({ obfuscated_code: scriptCode })
+              .eq("id", scriptId);
+            console.log("[Loader] Cached obfuscated code to database");
+          } catch (e) {
+            console.error("[Loader] Failed to cache obfuscated code:", e);
+          }
+        }
+      } else {
+        // IMPORTANT: For compatibility, do NOT apply local obfuscation on large real-world scripts.
+        // It can easily break behavior (e.g., if the script relies on certain identifier names).
+        // Instead, fall back to original code.
+        console.warn("[Loader] API obfuscation failed; serving original code un-obfuscated");
+        scriptCode = originalCode;
+      }
     }
   }
 
