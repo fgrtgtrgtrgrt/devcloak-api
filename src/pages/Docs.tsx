@@ -14,7 +14,7 @@ const Docs = () => {
               <span className="gradient-text">Documentation</span>
             </h1>
             <p className="text-lg text-muted-foreground">
-              Learn how to integrate ScriptHub into your Roblox projects.
+              Learn how to integrate VizionDev into your Roblox projects.
             </p>
           </div>
 
@@ -126,7 +126,7 @@ const Docs = () => {
                       <span className="text-accent">game</span>:
                       <span className="text-accent">HttpGet</span>(
                       <span className="text-success">
-                        "https://api.scripthub.dev/v1/load/your-script"
+                        "https://api.viziondev.com/v1/load/your-script"
                       </span>
                       ))()
                     </code>
@@ -160,7 +160,7 @@ const Docs = () => {
                       <span className="text-accent">game</span>:
                       <span className="text-accent">HttpGet</span>(
                       <span className="text-success">
-                        "https://api.scripthub.dev/v1/load/your-script"
+                        "https://api.viziondev.com/v1/load/your-script"
                       </span>
                       ))()
                     </code>

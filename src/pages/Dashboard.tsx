@@ -2,7 +2,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Plus, Code, Key, Users, CheckCircle } from "lucide-react";
+import { Plus, Code, BarChart3 } from "lucide-react";
 import { useScripts, Script } from "@/hooks/useScripts";
 import { ScriptCard } from "@/components/dashboard/ScriptCard";
 import { ScriptLoader } from "@/components/dashboard/ScriptLoader";
@@ -12,6 +12,8 @@ import { BlacklistManager } from "@/components/dashboard/BlacklistManager";
 import { ExecutionLogs } from "@/components/dashboard/ExecutionLogs";
 import { CreateScriptModal } from "@/components/dashboard/CreateScriptModal";
 import { ScriptSettingsModal } from "@/components/dashboard/ScriptSettingsModal";
+import { AnalyticsDashboard } from "@/components/dashboard/AnalyticsDashboard";
+import { QuickActions } from "@/components/dashboard/QuickActions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Dashboard = () => {
@@ -19,6 +21,7 @@ const Dashboard = () => {
   const [showNewScript, setShowNewScript] = useState(false);
   const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null);
   const [settingsScript, setSettingsScript] = useState<Script | null>(null);
+  const [activeView, setActiveView] = useState<"scripts" | "analytics">("scripts");
 
   const selectedScript = scripts.find((s) => s.id === selectedScriptId);
 
@@ -49,37 +52,47 @@ const Dashboard = () => {
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Dashboard Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+              <h1 className="text-3xl font-bold gradient-text">Dashboard</h1>
               <p className="text-muted-foreground mt-1">
-                Manage your scripts, keys, and whitelists
+                Manage your scripts, keys, and analytics
               </p>
             </div>
-            <Button variant="hero" onClick={() => setShowNewScript(true)} className="w-full md:w-auto">
-              <Plus className="w-4 h-4" />
-              New Script
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-secondary/50 rounded-lg p-1">
+                <Button 
+                  variant={activeView === "scripts" ? "default" : "ghost"} 
+                  size="sm"
+                  onClick={() => setActiveView("scripts")}
+                  className="gap-2"
+                >
+                  <Code className="w-4 h-4" />
+                  Scripts
+                </Button>
+                <Button 
+                  variant={activeView === "analytics" ? "default" : "ghost"} 
+                  size="sm"
+                  onClick={() => setActiveView("analytics")}
+                  className="gap-2"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Analytics
+                </Button>
+              </div>
+              <Button variant="hero" onClick={() => setShowNewScript(true)} className="w-full md:w-auto">
+                <Plus className="w-4 h-4" />
+                New Script
+              </Button>
+            </div>
           </div>
 
-          {/* Stats Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {[
-              { label: "Total Scripts", value: scripts.length, icon: Code },
-              { label: "Active Scripts", value: scripts.filter(s => s.is_active).length, icon: Key },
-              { label: "Key Protected", value: scripts.filter(s => s.protection_mode === "key").length, icon: Users },
-              { label: "Keyless", value: scripts.filter(s => s.protection_mode === "keyless").length, icon: CheckCircle },
-            ].map((stat) => (
-              <div key={stat.label} className="stat-card">
-                <div className="flex items-center justify-between">
-                  <stat.icon className="w-5 h-5 text-primary" />
-                </div>
-                <div className="mt-4">
-                  <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-                  <div className="text-sm text-muted-foreground">{stat.label}</div>
-                </div>
-              </div>
-            ))}
+          {/* Quick Actions */}
+          <div className="mb-6">
+            <QuickActions 
+              selectedScript={selectedScript ?? null} 
+              onNewScript={() => setShowNewScript(true)}
+            />
           </div>
 
           {loading ? (
@@ -87,6 +100,8 @@ const Dashboard = () => {
               <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
               <p className="text-muted-foreground">Loading scripts...</p>
             </div>
+          ) : activeView === "analytics" ? (
+            <AnalyticsDashboard scripts={scripts} />
           ) : scripts.length === 0 ? (
             <div className="text-center py-16 glass-card">
               <Code className="w-16 h-16 text-muted-foreground mx-auto mb-4" />

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Code2, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { Eye as EyeIcon, ArrowLeft, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -107,8 +107,8 @@ const Auth = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.3)]">
-              <Code2 className="w-6 h-6 text-primary" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.3)]">
+              <EyeIcon className="w-6 h-6 text-primary" />
             </div>
           </Link>
           <h1 className="text-2xl font-bold text-foreground">
@@ -117,7 +117,7 @@ const Auth = () => {
           <p className="text-muted-foreground mt-2">
             {isLogin
               ? "Sign in to access your dashboard"
-              : "Get started with ScriptHub"}
+              : "Get started with VizionDev"}
           </p>
         </div>
 
@@ -159,7 +159,7 @@ const Auth = () => {
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
                   ) : (
-                    <Eye className="w-4 h-4" />
+                    <EyeIcon className="w-4 h-4" />
                   )}
                 </button>
               </div>
