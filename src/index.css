@@ -6,57 +6,57 @@
 
 @layer base {
   :root {
-    --background: 220 20% 4%;
-    --foreground: 210 40% 98%;
+    --background: 260 25% 4%;
+    --foreground: 270 40% 98%;
 
-    --card: 220 18% 8%;
-    --card-foreground: 210 40% 98%;
+    --card: 260 22% 8%;
+    --card-foreground: 270 40% 98%;
 
-    --popover: 220 18% 10%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 260 22% 10%;
+    --popover-foreground: 270 40% 98%;
 
-    --primary: 174 100% 50%;
-    --primary-foreground: 220 20% 4%;
+    --primary: 280 85% 60%;
+    --primary-foreground: 260 25% 4%;
 
-    --secondary: 220 15% 15%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 260 18% 15%;
+    --secondary-foreground: 270 40% 98%;
 
-    --muted: 220 15% 12%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 260 18% 12%;
+    --muted-foreground: 270 20% 55%;
 
-    --accent: 280 80% 60%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 330 85% 60%;
+    --accent-foreground: 270 40% 98%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 270 40% 98%;
 
     --success: 142 76% 46%;
-    --success-foreground: 210 40% 98%;
+    --success-foreground: 270 40% 98%;
 
     --warning: 45 93% 47%;
-    --warning-foreground: 220 20% 4%;
+    --warning-foreground: 260 25% 4%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 15%;
-    --ring: 174 100% 50%;
+    --border: 260 18% 18%;
+    --input: 260 18% 15%;
+    --ring: 280 85% 60%;
 
     --radius: 0.75rem;
 
-    --neon-glow: 0 0 20px hsl(174 100% 50% / 0.4), 0 0 40px hsl(174 100% 50% / 0.2);
-    --neon-glow-strong: 0 0 20px hsl(174 100% 50% / 0.6), 0 0 60px hsl(174 100% 50% / 0.3);
-    --accent-glow: 0 0 20px hsl(280 80% 60% / 0.4), 0 0 40px hsl(280 80% 60% / 0.2);
+    --neon-glow: 0 0 20px hsl(280 85% 60% / 0.4), 0 0 40px hsl(280 85% 60% / 0.2);
+    --neon-glow-strong: 0 0 20px hsl(280 85% 60% / 0.6), 0 0 60px hsl(280 85% 60% / 0.3);
+    --accent-glow: 0 0 20px hsl(330 85% 60% / 0.4), 0 0 40px hsl(330 85% 60% / 0.2);
     
-    --glass-bg: hsl(220 18% 8% / 0.8);
-    --glass-border: hsl(220 15% 20% / 0.5);
+    --glass-bg: hsl(260 22% 8% / 0.8);
+    --glass-border: hsl(260 18% 20% / 0.5);
 
-    --sidebar-background: 220 18% 8%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 174 100% 50%;
-    --sidebar-primary-foreground: 220 20% 4%;
-    --sidebar-accent: 220 15% 15%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 174 100% 50%;
+    --sidebar-background: 260 22% 8%;
+    --sidebar-foreground: 270 40% 98%;
+    --sidebar-primary: 280 85% 60%;
+    --sidebar-primary-foreground: 260 25% 4%;
+    --sidebar-accent: 260 18% 15%;
+    --sidebar-accent-foreground: 270 40% 98%;
+    --sidebar-border: 260 18% 18%;
+    --sidebar-ring: 280 85% 60%;
   }
 }
 
@@ -90,7 +90,7 @@
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-primary via-cyan-300 to-accent bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary via-purple-400 to-accent bg-clip-text text-transparent;
   }
 
   .code-block {
@@ -99,16 +99,16 @@
 
   .grid-pattern {
     background-image: 
-      linear-gradient(to right, hsl(220 15% 15% / 0.3) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(220 15% 15% / 0.3) 1px, transparent 1px);
+      linear-gradient(to right, hsl(260 18% 15% / 0.3) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(260 18% 15% / 0.3) 1px, transparent 1px);
     background-size: 60px 60px;
   }
 
   .hero-gradient {
     background: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(174 100% 50% / 0.15), transparent),
-      radial-gradient(ellipse 60% 40% at 80% 50%, hsl(280 80% 60% / 0.1), transparent),
-      radial-gradient(ellipse 40% 30% at 10% 70%, hsl(174 100% 50% / 0.08), transparent);
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(280 85% 60% / 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 50%, hsl(330 85% 60% / 0.1), transparent),
+      radial-gradient(ellipse 40% 30% at 10% 70%, hsl(280 85% 60% / 0.08), transparent);
   }
 
   .stat-card {

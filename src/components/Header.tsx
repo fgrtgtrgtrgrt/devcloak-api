@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Code2, Menu, X, LogOut } from "lucide-react";
+import { Eye, Menu, X, LogOut, Settings } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,12 +29,12 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center group-hover:shadow-[0_0_20px_hsl(var(--primary)/0.4)] transition-all duration-300">
-              <Code2 className="w-5 h-5 text-primary" />
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 flex items-center justify-center group-hover:shadow-[0_0_20px_hsl(var(--primary)/0.4)] transition-all duration-300">
+              <Eye className="w-5 h-5 text-primary" />
             </div>
             <span className="font-bold text-xl tracking-tight">
-              <span className="text-primary neon-text">Script</span>
-              <span className="text-foreground">Hub</span>
+              <span className="gradient-text">Vizion</span>
+              <span className="text-foreground">Dev</span>
             </span>
           </Link>
 
@@ -64,6 +64,11 @@ const Header = () => {
                     <span className="text-sm text-muted-foreground">
                       {user.email}
                     </span>
+                    <Link to="/settings">
+                      <Button variant="ghost" size="sm">
+                        <Settings className="w-4 h-4" />
+                      </Button>
+                    </Link>
                     <Button variant="ghost" size="sm" onClick={handleSignOut}>
                       <LogOut className="w-4 h-4" />
                       Sign Out

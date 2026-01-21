@@ -9,9 +9,10 @@ const HeroSection = () => {
       <div className="absolute inset-0 hero-gradient" />
       <div className="absolute inset-0 grid-pattern opacity-40" />
       
-      {/* Floating Orbs */}
+      {/* Floating Orbs - Purple/Pink */}
       <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-primary/20 rounded-full blur-[100px] animate-float" />
       <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-accent/20 rounded-full blur-[80px] animate-float" style={{ animationDelay: '2s' }} />
+      <div className="absolute top-1/2 right-1/3 w-32 h-32 bg-purple-500/15 rounded-full blur-[60px] animate-float" style={{ animationDelay: '4s' }} />
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
@@ -71,7 +72,7 @@ const HeroSection = () => {
                 <span className="text-foreground">:</span>
                 <span className="text-accent">HttpGet</span>
                 <span className="text-foreground">(</span>
-                <span className="text-success">"https://api.scripthub.dev/v1/load/abc123"</span>
+                <span className="text-success">"https://api.viziondev.com/v1/load/abc123"</span>
                 <span className="text-foreground">))()</span>
               </code>
             </pre>
