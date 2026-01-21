@@ -1,11 +1,15 @@
 import { Button } from "@/components/ui/button";
-import { Code2, Menu, X } from "lucide-react";
+import { Code2, Menu, X, LogOut } from "lucide-react";
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut, loading } = useAuth();
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -13,13 +17,19 @@ const Header = () => {
     { href: "/docs", label: "Docs" },
   ];
 
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success("Signed out successfully");
+    navigate("/");
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center group-hover:shadow-[0_0_20px_hsl(174_100%_50%/0.4)] transition-all duration-300">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center group-hover:shadow-[0_0_20px_hsl(var(--primary)/0.4)] transition-all duration-300">
               <Code2 className="w-5 h-5 text-primary" />
             </div>
             <span className="font-bold text-xl tracking-tight">
@@ -47,16 +57,34 @@ const Header = () => {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <Link to="/auth">
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </Link>
-            <Link to="/auth">
-              <Button variant="default" size="sm">
-                Get Started
-              </Button>
-            </Link>
+            {!loading && (
+              <>
+                {user ? (
+                  <>
+                    <span className="text-sm text-muted-foreground">
+                      {user.email}
+                    </span>
+                    <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/auth">
+                      <Button variant="ghost" size="sm">
+                        Sign In
+                      </Button>
+                    </Link>
+                    <Link to="/auth">
+                      <Button variant="default" size="sm">
+                        Get Started
+                      </Button>
+                    </Link>
+                  </>
+                )}
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -87,14 +115,23 @@ const Header = () => {
                 </Link>
               ))}
               <div className="flex gap-3 mt-4 px-4">
-                <Link to="/auth" className="flex-1">
-                  <Button variant="outline" className="w-full">
-                    Sign In
+                {user ? (
+                  <Button variant="outline" className="w-full" onClick={handleSignOut}>
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
                   </Button>
-                </Link>
-                <Link to="/auth" className="flex-1">
-                  <Button className="w-full">Get Started</Button>
-                </Link>
+                ) : (
+                  <>
+                    <Link to="/auth" className="flex-1">
+                      <Button variant="outline" className="w-full">
+                        Sign In
+                      </Button>
+                    </Link>
+                    <Link to="/auth" className="flex-1">
+                      <Button className="w-full">Get Started</Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
           </div>

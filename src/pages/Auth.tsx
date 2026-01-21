@@ -1,10 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Code2, ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { z } from "zod";
+
+const authSchema = z.object({
+  email: z.string().trim().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -16,13 +23,28 @@ const Auth = () => {
     confirmPassword: "",
   });
 
+  const { user, signIn, signUp } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Validation
-    if (!formData.email || !formData.password) {
-      toast.error("Please fill in all fields");
+    // Validate input
+    const validation = authSchema.safeParse({
+      email: formData.email,
+      password: formData.password,
+    });
+
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
       setLoading(false);
       return;
     }
@@ -33,11 +55,37 @@ const Auth = () => {
       return;
     }
 
-    // Simulate auth - will be connected to Supabase
-    setTimeout(() => {
-      toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
+    try {
+      if (isLogin) {
+        const { error } = await signIn(formData.email, formData.password);
+        if (error) {
+          if (error.message.includes("Invalid login credentials")) {
+            toast.error("Invalid email or password");
+          } else {
+            toast.error(error.message);
+          }
+        } else {
+          toast.success("Welcome back!");
+          navigate("/dashboard");
+        }
+      } else {
+        const { error } = await signUp(formData.email, formData.password);
+        if (error) {
+          if (error.message.includes("already registered")) {
+            toast.error("This email is already registered. Please sign in.");
+          } else {
+            toast.error(error.message);
+          }
+        } else {
+          toast.success("Account created successfully!");
+          navigate("/dashboard");
+        }
+      }
+    } catch (err) {
+      toast.error("An unexpected error occurred");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -59,7 +107,7 @@ const Auth = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center shadow-[0_0_20px_hsl(174_100%_50%/0.3)]">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.3)]">
               <Code2 className="w-6 h-6 text-primary" />
             </div>
           </Link>
