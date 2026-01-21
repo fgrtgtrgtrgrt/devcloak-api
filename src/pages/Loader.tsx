@@ -6,7 +6,8 @@ import { toast } from "sonner";
 export default function Loader() {
   const { scriptId } = useParams<{ scriptId: string }>();
   
-  const loaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${scriptId}`;
+  // raw=1 forces Lua output even when the executor sends a browser-like user-agent.
+  const loaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${scriptId}?raw=1`;
   
   const copyLoader = () => {
     const loader = `getgenv().SCRIPT_KEY = "YOUR_KEY_HERE"
