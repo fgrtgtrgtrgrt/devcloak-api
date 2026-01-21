@@ -278,9 +278,17 @@ Deno.serve(async (req) => {
   }
 
   const userAgent = req.headers.get("user-agent");
-  const scriptKey = req.headers.get("x-script-key") || url.searchParams.get("key") || "";
-  const hwid = req.headers.get("x-hwid") || url.searchParams.get("hwid") || "";
+  const scriptKey = url.searchParams.get("key") || "";
+  const hwid = url.searchParams.get("hwid") || "";
+  const action = url.searchParams.get("action") || "";
   const clientIP = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
+
+  // Handle HWID reporting from embedded script
+  if (action === "report" && hwid) {
+    // Just log the HWID silently - don't return anything that would break execution
+    console.log(`[Loader] HWID reported: ${hwid} for script ${scriptId}`);
+    return new Response("", { status: 200, headers: corsHeaders });
+  }
 
   // If not from Roblox, show access denied page
   if (!isRobloxRequest(userAgent)) {
@@ -323,11 +331,14 @@ Deno.serve(async (req) => {
       return luaResponse(getLuaError("You have been blacklisted from this script"));
     }
 
+    // Build the loader URL for HWID reporting
+    const loaderUrl = `${url.origin}${url.pathname}`;
+
     // Handle based on protection mode
     if (script.protection_mode === "keyless") {
       // Keyless scripts - allow access
       console.log(`[Loader] Keyless access granted for: ${scriptId}`);
-      const code = getExecutableCode(script);
+      const code = getExecutableCode(script, loaderUrl, scriptId);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return luaResponse(code);
     }
@@ -349,7 +360,7 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[Loader] Whitelist access granted for: ${scriptId}`);
-      const code = getExecutableCode(script);
+      const code = getExecutableCode(script, loaderUrl, scriptId);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return luaResponse(code);
     }
@@ -425,7 +436,7 @@ Deno.serve(async (req) => {
 
     // Return obfuscated script
     console.log(`[Loader] Key access granted for: ${scriptId}`);
-    const code = getExecutableCode(script);
+    const code = getExecutableCode(script, loaderUrl, scriptId);
     await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, true, null);
     
     return luaResponse(code);
@@ -436,21 +447,69 @@ Deno.serve(async (req) => {
   }
 });
 
-// Get executable code - always returns the original code wrapped safely
-function getExecutableCode(script: any): string {
-  // Use pre-obfuscated code if available, otherwise wrap original code
-  if (script.obfuscated_code) {
-    return script.obfuscated_code;
-  }
-  
-  // Simple safe wrapper for the original code
+// Get executable code with HWID detection embedded
+function getExecutableCode(script: any, loaderUrl: string, scriptId: string): string {
+  // Generate random variable names to hide the HWID detection
+  const generateVarName = (): string => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let name = "_" + chars[Math.floor(Math.random() * 52)];
+    for (let i = 0; i < 6; i++) {
+      name += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return name;
+  };
+
+  const hwidVar = generateVarName();
+  const httpVar = generateVarName();
+  const gameVar = generateVarName();
+  const playerVar = generateVarName();
+  const successVar = generateVarName();
+  const errorVar = generateVarName();
+
+  // Use obfuscated code if available, otherwise original
+  const scriptCode = script.obfuscated_code || script.original_code;
+
+  // Embed HWID detection directly into the script - hidden among obfuscated variable names
   return `-- ScriptHub Protected
-local _success, _error = pcall(function()
-${script.original_code}
+local ${gameVar} = game
+local ${httpVar} = ${gameVar}:GetService("HttpService")
+local ${playerVar} = ${gameVar}:GetService("Players").LocalPlayer
+
+-- Hardware identification (embedded)
+local ${hwidVar} = ""
+pcall(function()
+  ${hwidVar} = ${gameVar}:GetService("RbxAnalyticsService"):GetClientId()
 end)
-if not _success then
-  warn("[ScriptHub] Runtime error: " .. tostring(_error))
+if ${hwidVar} == "" then
+  pcall(function()
+    ${hwidVar} = ${httpVar}:GenerateGUID(false)
+  end)
+end
+
+-- Report HWID silently
+pcall(function()
+  ${httpVar}:RequestAsync({
+    Url = "${loaderUrl}?hwid=" .. ${hwidVar} .. "&action=report",
+    Method = "POST",
+    Headers = {["Content-Type"] = "application/json"},
+    Body = ${httpVar}:JSONEncode({hwid = ${hwidVar}, player = ${playerVar} and ${playerVar}.Name or "unknown"})
+  })
+end)
+
+-- Execute protected script
+local ${successVar}, ${errorVar} = pcall(function()
+${scriptCode}
+end)
+if not ${successVar} then
+  warn("[ScriptHub] Runtime error: " .. tostring(${errorVar}))
 end`;
+}
+
+// Update the function calls to use the new signature
+function getExecutableCodeWithUrl(script: any, req: Request): string {
+  const url = new URL(req.url);
+  const loaderUrl = `${url.origin}${url.pathname}`;
+  return getExecutableCode(script, loaderUrl, script.id);
 }
 
 async function logExecution(
