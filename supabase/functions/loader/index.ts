@@ -129,59 +129,96 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
   }
 }
 
-// Fallback local obfuscation if API fails
+// Lightweight local obfuscation - SAFE for complex Luau scripts
+// Only renames local variables, no control flow or string changes
 function localObfuscate(code: string): string {
+  // Generate short random names like _a1b2c3
+  const usedNames = new Set<string>();
   const generateVarName = (): string => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    let name = "_" + chars[Math.floor(Math.random() * 52)];
-    for (let i = 0; i < 6; i++) {
-      name += chars[Math.floor(Math.random() * chars.length)];
-    }
+    const chars = "abcdefghijklmnopqrstuvwxyz";
+    let name: string;
+    do {
+      name = "_";
+      for (let i = 0; i < 6; i++) {
+        name += chars[Math.floor(Math.random() * chars.length)];
+      }
+    } while (usedNames.has(name));
+    usedNames.add(name);
     return name;
   };
 
-  // Basic string encoding
-  const encodeString = (str: string): string => {
-    const key = Math.floor(Math.random() * 200) + 55;
-    const bytes = [];
-    for (let i = 0; i < str.length; i++) {
-      bytes.push(str.charCodeAt(i) ^ key);
-    }
-    return `(function(t,k) local r="" for i=1,#t do r=r..string.char(bit32 and bit32.bxor(t[i],k) or ((t[i]+256-k)%256)) end return r end)({${bytes.join(",")}},${key})`;
-  };
+  // Extensive reserved word list - DO NOT rename these
+  const reserved = new Set([
+    // Lua keywords
+    'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function',
+    'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then',
+    'true', 'until', 'while',
+    // Lua built-ins
+    'assert', 'collectgarbage', 'dofile', 'error', 'getmetatable', 'ipairs',
+    'load', 'loadfile', 'loadstring', 'next', 'pairs', 'pcall', 'print',
+    'rawequal', 'rawget', 'rawlen', 'rawset', 'require', 'select',
+    'setmetatable', 'tonumber', 'tostring', 'type', 'unpack', 'xpcall',
+    '_G', '_VERSION',
+    // Lua libraries
+    'bit32', 'coroutine', 'debug', 'io', 'math', 'os', 'package', 'string', 'table', 'utf8',
+    // Roblox globals
+    'game', 'workspace', 'script', 'plugin', 'shared', 'owner',
+    'wait', 'spawn', 'delay', 'tick', 'time', 'elapsed', 'elapsedTime',
+    'warn', 'typeof', 'getfenv', 'setfenv', 'newproxy', 'ypcall',
+    // Roblox task library
+    'task',
+    // Roblox types
+    'Axes', 'BrickColor', 'CatalogSearchParams', 'CFrame', 'Color3', 'ColorSequence',
+    'ColorSequenceKeypoint', 'DateTime', 'DockWidgetPluginGuiInfo', 'Enum', 'Enums',
+    'Faces', 'FloatCurveKey', 'Font', 'Instance', 'NumberRange', 'NumberSequence',
+    'NumberSequenceKeypoint', 'OverlapParams', 'PathWaypoint', 'PhysicalProperties',
+    'Random', 'Ray', 'RaycastParams', 'RaycastResult', 'RBXScriptConnection',
+    'RBXScriptSignal', 'Rect', 'Region3', 'Region3int16', 'RotationCurveKey',
+    'TweenInfo', 'UDim', 'UDim2', 'Vector2', 'Vector2int16', 'Vector3', 'Vector3int16',
+    // Executor globals (common)
+    'getgenv', 'getrenv', 'getsenv', 'getrawmetatable', 'setrawmetatable',
+    'hookfunction', 'hookmetamethod', 'newcclosure', 'islclosure', 'iscclosure',
+    'checkcaller', 'getcallingscript', 'IDENTIFYEXECUTOR', 'identifyexecutor',
+    'syn', 'fluxus', 'Drawing', 'debug', 'firesignal', 'fireclickdetector',
+    'getconnections', 'gethiddenproperty', 'sethiddenproperty', 'gethui', 'getinstances',
+    'getnilinstances', 'isnetworkowner', 'setclipboard', 'setfflag',
+    // Common variable names that might be used as method calls
+    'self', 'cls', 'this', 'super', 'new', 'init', 'constructor',
+  ]);
 
-  // Basic variable renaming
   const varMap = new Map<string, string>();
-  const reserved = new Set(['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while', 'game', 'workspace', 'script', 'wait', 'spawn', 'task', 'pcall', 'print', 'warn', 'error', 'pairs', 'ipairs', 'tostring', 'tonumber', 'type', 'typeof', 'setmetatable', 'getmetatable', 'rawget', 'rawset', 'string', 'table', 'math', 'bit32', 'coroutine', 'Instance', 'Vector3', 'Vector2', 'CFrame', 'Color3', 'Enum', '_G', 'shared', 'loadstring', 'getfenv', 'setfenv']);
 
-  let obfuscated = code;
-
-  // Find and rename local variables
-  const localPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  // Only rename variables declared with "local varname" pattern
+  // Be very conservative - only exact matches
+  const localVarPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|,|\n|$)/g;
   let match;
-  while ((match = localPattern.exec(code)) !== null) {
+  while ((match = localVarPattern.exec(code)) !== null) {
     const varName = match[1];
-    if (!reserved.has(varName) && !varMap.has(varName)) {
+    // Skip short names (likely important), reserved words, and already mapped
+    if (varName.length >= 2 && !reserved.has(varName) && !varMap.has(varName)) {
       varMap.set(varName, generateVarName());
     }
   }
 
+  // Also find "local function name(" patterns
+  const localFuncPattern = /\blocal\s+function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g;
+  while ((match = localFuncPattern.exec(code)) !== null) {
+    const funcName = match[1];
+    if (funcName.length >= 2 && !reserved.has(funcName) && !varMap.has(funcName)) {
+      varMap.set(funcName, generateVarName());
+    }
+  }
+
+  // Apply renaming with word boundaries
+  let obfuscated = code;
   for (const [original, renamed] of varMap) {
+    // Use word boundary regex to avoid partial replacements
     const regex = new RegExp(`\\b${original}\\b`, 'g');
     obfuscated = obfuscated.replace(regex, renamed);
   }
 
-  // Wrap in execution context
-  const wrapperVar = generateVarName();
-  const errVar = generateVarName();
-
-  return `-- ScriptHub Protected (Fallback)
-local ${wrapperVar}, ${errVar} = pcall(function()
-${obfuscated}
-end)
-if not ${wrapperVar} then
-  warn("[ScriptHub] Error: " .. tostring(${errVar}))
-end`;
+  // Add a simple header comment (no pcall wrapper - it can break some scripts)
+  return `-- VizionDevelopments Protected\n${obfuscated}`;
 }
 
 // Generate access denied HTML page
@@ -685,16 +722,12 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
     }
   }
 
-  // Simple wrapper for error handling
-  const wrapperCode = `-- VizionDevelopments Protected
-local ${successVar}, ${errorVar} = pcall(function()
-${scriptCode}
-end)
-if not ${successVar} then
-  warn("[VizionDevelopments] Runtime error: " .. tostring(${errorVar}))
-end`;
-
-  return wrapperCode;
+  // Return script directly without pcall wrapper (it can break some scripts)
+  // The localObfuscate function already adds the header comment
+  if (scriptCode.startsWith("-- VizionDevelopments")) {
+    return scriptCode;
+  }
+  return `-- VizionDevelopments Protected\n${scriptCode}`;
 }
 
 async function logExecution(
