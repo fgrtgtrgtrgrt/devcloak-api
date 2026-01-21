@@ -245,8 +245,12 @@ export function useScriptKeys(scriptId: string | null) {
     if (!scriptId) return null;
 
     try {
-      // Generate unique key
-      const keyValue = `SH-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      // Generate longer unique key with more entropy
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random1 = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const random2 = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const random3 = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const keyValue = `SH-${timestamp}-${random1}-${random2}-${random3}`;
 
       const { data, error } = await supabase
         .from("script_keys")

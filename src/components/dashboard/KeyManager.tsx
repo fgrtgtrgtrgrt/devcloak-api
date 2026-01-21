@@ -169,11 +169,11 @@ export function KeyManager({ scriptId }: KeyManagerProps) {
                 <TableRow key={key.id}>
                   <TableCell className="font-mono text-xs">
                     <div className="flex items-center gap-2">
-                      {key.key_value.substring(0, 16)}...
+                      <span className="max-w-[180px] truncate">{key.key_value}</span>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-6 w-6 flex-shrink-0"
                         onClick={() => copyKey(key.key_value)}
                       >
                         <Copy className="w-3 h-3" />
@@ -207,9 +207,12 @@ export function KeyManager({ scriptId }: KeyManagerProps) {
                   <TableCell className="text-sm">
                     {key.hwid_lock_enabled ? (
                       key.hwid_locked ? (
-                        <span className="text-xs text-muted-foreground">
-                          Locked
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-xs text-success">Locked</span>
+                          <span className="font-mono text-[10px] text-muted-foreground max-w-[120px] truncate" title={key.hwid_locked}>
+                            {key.hwid_locked}
+                          </span>
+                        </div>
                       ) : (
                         <span className="text-xs text-amber-500">Pending</span>
                       )

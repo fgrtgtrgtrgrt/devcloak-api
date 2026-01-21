@@ -5,28 +5,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-script-key, x-hwid",
 };
 
-// Helper to create HTML response with proper headers
-function htmlResponse(html: string): Response {
-  const headers = new Headers();
-  headers.set("Content-Type", "text/html; charset=utf-8");
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-  headers.set("X-Content-Type-Options", "nosniff");
-  
+// Helper to create HTML response with proper headers for BROWSER rendering
+function htmlResponse(html: string, status: number = 403): Response {
   return new Response(html, {
-    status: 200,
-    headers,
+    status,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }
 
-// Helper to create Lua/text response
+// Helper to create Lua/text response for EXECUTORS
 function luaResponse(code: string): Response {
   return new Response(code, {
     status: 200,
-    headers: new Headers({
-      ...corsHeaders,
+    headers: {
       "Content-Type": "text/plain; charset=utf-8",
-    }),
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    },
   });
 }
 
