@@ -35,7 +35,7 @@ function luaResponse(code: string): Response {
   });
 }
 
-// LuaObfuscator.com API integration (free, no API key required with "test" key)
+// LuaObfuscator.com API integration
 const LUAOBFUSCATOR_API = "https://api.luaobfuscator.com/v1/obfuscator";
 
 interface ObfuscationResult {
@@ -46,23 +46,29 @@ interface ObfuscationResult {
 
 // Call LuaObfuscator.com API for professional obfuscation
 async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
+  const apiKey = Deno.env.get("LUAOBFUSCATOR_API_KEY") || "test";
+  
   try {
-    // Step 1: Create a new session with the script
+    console.log("[Obfuscator] Creating session with LuaObfuscator.com API...");
+    
+    // Step 1: Create a new session with the script (content-type: text per docs)
     const sessionResponse = await fetch(`${LUAOBFUSCATOR_API}/newscript`, {
       method: "POST",
       headers: {
-        "Content-Type": "text/plain",
-        "apikey": "test",
+        "Content-Type": "text",
+        "apikey": apiKey,
       },
       body: code,
     });
 
     if (!sessionResponse.ok) {
-      console.error("[Obfuscator] Failed to create session:", sessionResponse.status);
-      return { success: false, code, error: "Failed to create obfuscation session" };
+      const errText = await sessionResponse.text();
+      console.error("[Obfuscator] Failed to create session:", sessionResponse.status, errText);
+      return { success: false, code, error: `Session creation failed: ${sessionResponse.status}` };
     }
 
     const sessionData = await sessionResponse.json();
+    console.log("[Obfuscator] Session response:", JSON.stringify(sessionData));
     
     if (sessionData.message) {
       console.error("[Obfuscator] Session error:", sessionData.message);
@@ -75,36 +81,57 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
       return { success: false, code, error: "No session ID returned" };
     }
 
-    // Step 2: Apply obfuscation with strong settings
+    console.log("[Obfuscator] Session created, applying obfuscation...");
+
+    // Step 2: Apply obfuscation with strong settings (per docs format)
     const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": "test",
+        "apikey": apiKey,
         "sessionId": sessionId,
       },
       body: JSON.stringify({
-        // Variable/literal obfuscation
-        "MinifyAll": true,
-        "EncryptStrings": true,
+        // Minify everything
+        "MinifiyAll": true,
         
-        // Control flow obfuscation
+        // Virtualization - converts to bytecode VM
         "Virtualize": true,
         
-        // Additional protection layers
-        "ConstantArray": true,
-        "ProxifyLocals": true,
-        "PaidWatermark": false,
-        "ByteCodeMode": "Default",
+        // Custom plugins for advanced protection
+        "CustomPlugins": {
+          // Encrypt all strings with XOR
+          "EncryptStrings": [100],
+          
+          // Control flow obfuscation
+          "ControlFlowFlattenV1AllBlocks": [80],
+          
+          // Variable renaming
+          "Minifier": true,
+          
+          // Turn globals into lookups
+          "MakeGlobalsLookups": true,
+          
+          // Swizzle lookups (foo.bar -> foo['bar'])
+          "SwizzleLookups": [100],
+          
+          // Mutate literals into expressions
+          "MutateAllLiterals": [80],
+          
+          // Inject opaque conditions
+          "JunkifyAllIfStatements": [50]
+        }
       }),
     });
 
     if (!obfuscateResponse.ok) {
-      console.error("[Obfuscator] Failed to obfuscate:", obfuscateResponse.status);
-      return { success: false, code, error: "Failed to apply obfuscation" };
+      const errText = await obfuscateResponse.text();
+      console.error("[Obfuscator] Failed to obfuscate:", obfuscateResponse.status, errText);
+      return { success: false, code, error: `Obfuscation failed: ${obfuscateResponse.status}` };
     }
 
     const obfuscateData = await obfuscateResponse.json();
+    console.log("[Obfuscator] Obfuscation response received, code length:", obfuscateData.code?.length || 0);
 
     if (obfuscateData.message) {
       console.error("[Obfuscator] Obfuscation error:", obfuscateData.message);
