@@ -283,11 +283,53 @@ Deno.serve(async (req) => {
   const action = url.searchParams.get("action") || "";
   const clientIP = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
 
-  // Handle HWID reporting from embedded script
+  // Handle HWID reporting/verification from embedded script
   if (action === "report" && hwid) {
-    // Just log the HWID silently - don't return anything that would break execution
     console.log(`[Loader] HWID reported: ${hwid} for script ${scriptId}`);
-    return new Response("", { status: 200, headers: corsHeaders });
+    return new Response("ok", { status: 200, headers: corsHeaders });
+  }
+
+  // Handle HWID verification for locked keys
+  if (action === "verify" && hwid) {
+    const keyToVerify = url.searchParams.get("key") || "";
+    console.log(`[Loader] HWID verify request: ${hwid} for key: ${keyToVerify}`);
+    
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Look up the key
+    const { data: key, error: keyError } = await supabase
+      .from("script_keys")
+      .select("*")
+      .eq("script_id", scriptId)
+      .eq("key_value", keyToVerify)
+      .eq("is_active", true)
+      .single();
+    
+    if (keyError || !key) {
+      return new Response("invalid", { status: 200, headers: corsHeaders });
+    }
+    
+    if (!key.hwid_lock_enabled) {
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+    
+    // Check if already locked to different HWID
+    if (key.hwid_locked && key.hwid_locked !== hwid) {
+      return new Response("locked", { status: 200, headers: corsHeaders });
+    }
+    
+    // Lock HWID if not already locked
+    if (!key.hwid_locked) {
+      await supabase
+        .from("script_keys")
+        .update({ hwid_locked: hwid })
+        .eq("id", key.id);
+      console.log(`[Loader] HWID locked for key: ${key.id}`);
+    }
+    
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
   // If not from Roblox, show access denied page
@@ -401,29 +443,8 @@ Deno.serve(async (req) => {
       return luaResponse(getLuaError("This key has reached its maximum usage limit"));
     }
 
-    // Check HWID lock
-    if (key.hwid_lock_enabled) {
-      if (!hwid) {
-        console.log(`[Loader] HWID required but not provided`);
-        await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "HWID required");
-        return luaResponse(getLuaError("HWID verification required. Please provide your HWID."));
-      }
-
-      if (key.hwid_locked && key.hwid_locked !== hwid) {
-        console.log(`[Loader] HWID mismatch for key: ${key.id}`);
-        await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "HWID mismatch");
-        return luaResponse(getLuaError("This key is locked to a different device. Request an HWID reset if needed."));
-      }
-
-      // Lock HWID if not already locked
-      if (!key.hwid_locked) {
-        await supabase
-          .from("script_keys")
-          .update({ hwid_locked: hwid })
-          .eq("id", key.id);
-        console.log(`[Loader] HWID locked for key: ${key.id}`);
-      }
-    }
+    // HWID lock is now handled in the embedded script - skip server-side check
+    // The embedded script will detect HWID and verify with the server before executing
 
     // Update key usage
     await supabase
@@ -434,9 +455,12 @@ Deno.serve(async (req) => {
       })
       .eq("id", key.id);
 
-    // Return obfuscated script
+    // Return obfuscated script with embedded HWID handling
     console.log(`[Loader] Key access granted for: ${scriptId}`);
-    const code = getExecutableCode(script, loaderUrl, scriptId);
+    const code = getExecutableCode(script, loaderUrl, scriptId, {
+      keyValue: scriptKey,
+      hwidLockEnabled: key.hwid_lock_enabled
+    });
     await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, true, null);
     
     return luaResponse(code);
@@ -448,7 +472,12 @@ Deno.serve(async (req) => {
 });
 
 // Get executable code with HWID detection embedded
-function getExecutableCode(script: any, loaderUrl: string, scriptId: string): string {
+interface KeyOptions {
+  keyValue?: string;
+  hwidLockEnabled?: boolean;
+}
+
+function getExecutableCode(script: any, loaderUrl: string, scriptId: string, keyOptions?: KeyOptions): string {
   // Generate random variable names to hide the HWID detection
   const generateVarName = (): string => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -465,9 +494,34 @@ function getExecutableCode(script: any, loaderUrl: string, scriptId: string): st
   const playerVar = generateVarName();
   const successVar = generateVarName();
   const errorVar = generateVarName();
+  const verifyVar = generateVarName();
+  const resultVar = generateVarName();
 
   // Use obfuscated code if available, otherwise original
   const scriptCode = script.obfuscated_code || script.original_code;
+
+  // Build HWID verification code for key-protected scripts with HWID lock
+  let hwidVerification = "";
+  if (keyOptions?.hwidLockEnabled && keyOptions?.keyValue) {
+    hwidVerification = `
+-- HWID verification (embedded)
+local ${verifyVar} = nil
+pcall(function()
+  local ${resultVar} = ${httpVar}:RequestAsync({
+    Url = "${loaderUrl}?hwid=" .. ${hwidVar} .. "&key=${keyOptions.keyValue}&action=verify",
+    Method = "GET"
+  })
+  ${verifyVar} = ${resultVar} and ${resultVar}.Body
+end)
+if ${verifyVar} == "locked" then
+  warn("[ScriptHub] This key is locked to a different device")
+  return
+elseif ${verifyVar} == "invalid" then
+  warn("[ScriptHub] Invalid key")
+  return
+end
+`;
+  }
 
   // Embed HWID detection directly into the script - hidden among obfuscated variable names
   return `-- ScriptHub Protected
@@ -495,7 +549,7 @@ pcall(function()
     Body = ${httpVar}:JSONEncode({hwid = ${hwidVar}, player = ${playerVar} and ${playerVar}.Name or "unknown"})
   })
 end)
-
+${hwidVerification}
 -- Execute protected script
 local ${successVar}, ${errorVar} = pcall(function()
 ${scriptCode}
