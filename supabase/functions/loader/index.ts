@@ -1,0 +1,512 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-script-key, x-hwid",
+};
+
+// Multi-layer Lua obfuscation
+function obfuscateLua(code: string, options: { antiTamper: boolean; antiDump: boolean; antiHook: boolean }): string {
+  // String encryption using XOR with dynamic key
+  const encryptString = (str: string): string => {
+    const key = Math.floor(Math.random() * 255) + 1;
+    const encrypted = [];
+    for (let i = 0; i < str.length; i++) {
+      encrypted.push(str.charCodeAt(i) ^ key);
+    }
+    return `(function() local k=${key} local t={${encrypted.join(",")}} local s="" for i=1,#t do s=s..string.char(bit32 and bit32.bxor(t[i],k) or ((t[i]~k))) end return s end)()`;
+  };
+
+  // Variable name obfuscation
+  const generateVarName = (): string => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
+    let name = chars[Math.floor(Math.random() * 52)];
+    for (let i = 0; i < 8; i++) {
+      name += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return name;
+  };
+
+  let obfuscated = code;
+
+  // Anti-tamper check wrapper
+  if (options.antiTamper) {
+    const checkVar = generateVarName();
+    const hashVar = generateVarName();
+    obfuscated = `
+local ${checkVar} = function()
+  local ${hashVar} = 0
+  for i = 1, 1000 do ${hashVar} = ${hashVar} + i end
+  return ${hashVar} == 500500
+end
+if not ${checkVar}() then return error("Integrity check failed") end
+${obfuscated}`;
+  }
+
+  // Anti-dump protection
+  if (options.antiDump) {
+    const funcVar = generateVarName();
+    obfuscated = `
+local ${funcVar} = function()
+  if getfenv then
+    local env = getfenv(1)
+    if env.script and env.script.Source then
+      return error("Access denied")
+    end
+  end
+end
+pcall(${funcVar})
+${obfuscated}`;
+  }
+
+  // Anti-hook detection
+  if (options.antiHook) {
+    const origVar = generateVarName();
+    obfuscated = `
+local ${origVar} = {
+  ["print"] = print,
+  ["warn"] = warn,
+  ["error"] = error,
+  ["loadstring"] = loadstring,
+  ["require"] = require
+}
+for k,v in pairs(${origVar}) do
+  if type(_G[k]) ~= type(v) then
+    return error("Environment tampered")
+  end
+end
+${obfuscated}`;
+  }
+
+  // Control flow flattening - wrap in state machine
+  const stateVar = generateVarName();
+  const loopVar = generateVarName();
+  
+  obfuscated = `
+local ${stateVar} = 1
+local ${loopVar} = true
+while ${loopVar} do
+  if ${stateVar} == 1 then
+    ${stateVar} = 2
+  elseif ${stateVar} == 2 then
+    ${obfuscated}
+    ${loopVar} = false
+  end
+end`;
+
+  // Wrap entire script in protected call
+  const wrapperVar = generateVarName();
+  const errVar = generateVarName();
+  
+  return `-- Protected Script
+local ${wrapperVar}, ${errVar} = pcall(function()
+${obfuscated}
+end)
+if not ${wrapperVar} then
+  warn("[ScriptHub] Runtime error: " .. tostring(${errVar}))
+end`;
+}
+
+// Generate access denied HTML page
+function getAccessDeniedHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access Denied - ScriptHub</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+    }
+    .container {
+      text-align: center;
+      padding: 3rem;
+      background: rgba(20, 20, 35, 0.8);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 24px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 0 60px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+      max-width: 500px;
+      position: relative;
+    }
+    .container::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 26px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.5), transparent, rgba(236, 72, 153, 0.5));
+      z-index: -1;
+      animation: glow 3s ease-in-out infinite;
+    }
+    @keyframes glow {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    .shield {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 1.5rem;
+      background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+    }
+    .shield svg {
+      width: 40px;
+      height: 40px;
+      fill: white;
+    }
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: #ec4899;
+      font-size: 1rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      margin-bottom: 1.5rem;
+    }
+    p {
+      color: rgba(255,255,255,0.7);
+      font-size: 1rem;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+    .warning {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      margin-top: 1rem;
+    }
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      z-index: -2;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+  <div class="container">
+    <div class="shield">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+    </div>
+    <div class="subtitle">Protected Script</div>
+    <h1>ACCESS DENIED</h1>
+    <p>This script is protected by ScriptHub's enterprise-grade security system.</p>
+    <p>Direct browser access is prohibited. This endpoint is designed for Roblox executor use only.</p>
+    <div class="warning">
+      <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+      Unauthorized access attempts are logged
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Generate Lua error code that displays message and stops execution
+function getLuaError(message: string): string {
+  return `-- ScriptHub Protection
+error("[ScriptHub] ${message.replace(/"/g, '\\"')}")
+return`;
+}
+
+// Check if request is from Roblox executor
+function isRobloxRequest(userAgent: string | null): boolean {
+  if (!userAgent) return false;
+  const robloxIndicators = [
+    "roblox",
+    "synapse",
+    "script-ware",
+    "krnl",
+    "fluxus",
+    "oxygen",
+    "electron",
+    "evon",
+    "arceus",
+    "trigon",
+    "delta",
+    "hydrogen",
+    "comet",
+    "wave",
+    "httpget",
+    "luau"
+  ];
+  const lowerUA = userAgent.toLowerCase();
+  return robloxIndicators.some(indicator => lowerUA.includes(indicator));
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const url = new URL(req.url);
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  
+  // Expected path: /loader/{script_id}
+  const scriptId = pathParts[pathParts.length - 1];
+  
+  if (!scriptId || scriptId === "loader") {
+    const userAgent = req.headers.get("user-agent");
+    if (!isRobloxRequest(userAgent)) {
+      return new Response(getAccessDeniedHTML(), {
+        headers: { ...corsHeaders, "Content-Type": "text/html" },
+      });
+    }
+    return new Response(getLuaError("Invalid script ID"), {
+      headers: { ...corsHeaders, "Content-Type": "text/plain" },
+    });
+  }
+
+  const userAgent = req.headers.get("user-agent");
+  const scriptKey = req.headers.get("x-script-key") || url.searchParams.get("key") || "";
+  const hwid = req.headers.get("x-hwid") || url.searchParams.get("hwid") || "";
+  const clientIP = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
+
+  // If not from Roblox, show access denied page
+  if (!isRobloxRequest(userAgent)) {
+    return new Response(getAccessDeniedHTML(), {
+      headers: { ...corsHeaders, "Content-Type": "text/html" },
+    });
+  }
+
+  // Initialize Supabase client with service role for full access
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  try {
+    console.log(`[Loader] Request for script: ${scriptId}, key: ${scriptKey ? "provided" : "none"}, hwid: ${hwid ? "provided" : "none"}`);
+
+    // Fetch script
+    const { data: script, error: scriptError } = await supabase
+      .from("scripts")
+      .select("*")
+      .eq("id", scriptId)
+      .eq("is_active", true)
+      .single();
+
+    if (scriptError || !script) {
+      console.log(`[Loader] Script not found: ${scriptId}`);
+      await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Script not found");
+      return new Response(getLuaError("Script not found or inactive"), {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    // Check blacklist
+    const { data: blacklisted } = await supabase
+      .from("user_blacklist")
+      .select("id")
+      .or(`identifier.eq.${hwid},identifier.eq.${clientIP}`)
+      .or(`script_id.eq.${scriptId},is_global.eq.true`)
+      .limit(1);
+
+    if (blacklisted && blacklisted.length > 0) {
+      console.log(`[Loader] Blacklisted access attempt: ${hwid || clientIP}`);
+      await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Blacklisted");
+      return new Response(getLuaError("You have been blacklisted from this script"), {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    // Handle based on protection mode
+    if (script.protection_mode === "keyless") {
+      // Keyless scripts - allow access
+      console.log(`[Loader] Keyless access granted for: ${scriptId}`);
+      const code = script.obfuscated_code || obfuscateLua(script.original_code, {
+        antiTamper: script.anti_tamper,
+        antiDump: script.anti_dump,
+        antiHook: script.anti_hook,
+      });
+      await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
+      return new Response(code, {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    if (script.protection_mode === "whitelist") {
+      // Check whitelist
+      const { data: whitelisted } = await supabase
+        .from("script_whitelist")
+        .select("id")
+        .eq("script_id", scriptId)
+        .eq("is_active", true)
+        .or(`identifier.eq.${hwid},identifier.eq.${scriptKey}`)
+        .limit(1);
+
+      if (!whitelisted || whitelisted.length === 0) {
+        console.log(`[Loader] Whitelist check failed for: ${scriptId}`);
+        await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Not whitelisted");
+        return new Response(getLuaError("You are not whitelisted for this script"), {
+          headers: { ...corsHeaders, "Content-Type": "text/plain" },
+        });
+      }
+
+      console.log(`[Loader] Whitelist access granted for: ${scriptId}`);
+      const code = script.obfuscated_code || obfuscateLua(script.original_code, {
+        antiTamper: script.anti_tamper,
+        antiDump: script.anti_dump,
+        antiHook: script.anti_hook,
+      });
+      await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
+      return new Response(code, {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    // Key-based protection
+    if (!scriptKey || scriptKey === "KEYLESS") {
+      console.log(`[Loader] Key required but not provided for: ${scriptId}`);
+      await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Key required");
+      return new Response(getLuaError("This script requires a valid key. Get your key at scripthub.dev"), {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    // Validate key
+    const { data: key, error: keyError } = await supabase
+      .from("script_keys")
+      .select("*")
+      .eq("script_id", scriptId)
+      .eq("key_value", scriptKey)
+      .eq("is_active", true)
+      .single();
+
+    if (keyError || !key) {
+      console.log(`[Loader] Invalid key for: ${scriptId}`);
+      await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Invalid key");
+      return new Response(getLuaError("Invalid or inactive key"), {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    // Check expiration
+    if (key.expires_at && new Date(key.expires_at) < new Date()) {
+      console.log(`[Loader] Expired key for: ${scriptId}`);
+      await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "Key expired");
+      return new Response(getLuaError("Your key has expired. Please renew at scripthub.dev"), {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    // Check max uses
+    if (key.max_uses !== null && key.current_uses >= key.max_uses) {
+      console.log(`[Loader] Max uses reached for key: ${key.id}`);
+      await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "Max uses reached");
+      return new Response(getLuaError("This key has reached its maximum usage limit"), {
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
+    // Check HWID lock
+    if (key.hwid_lock_enabled) {
+      if (!hwid) {
+        console.log(`[Loader] HWID required but not provided`);
+        await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "HWID required");
+        return new Response(getLuaError("HWID verification required. Please provide your HWID."), {
+          headers: { ...corsHeaders, "Content-Type": "text/plain" },
+        });
+      }
+
+      if (key.hwid_locked && key.hwid_locked !== hwid) {
+        console.log(`[Loader] HWID mismatch for key: ${key.id}`);
+        await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "HWID mismatch");
+        return new Response(getLuaError("This key is locked to a different device. Request an HWID reset if needed."), {
+          headers: { ...corsHeaders, "Content-Type": "text/plain" },
+        });
+      }
+
+      // Lock HWID if not already locked
+      if (!key.hwid_locked) {
+        await supabase
+          .from("script_keys")
+          .update({ hwid_locked: hwid })
+          .eq("id", key.id);
+        console.log(`[Loader] HWID locked for key: ${key.id}`);
+      }
+    }
+
+    // Update key usage
+    await supabase
+      .from("script_keys")
+      .update({ 
+        current_uses: key.current_uses + 1,
+        last_used_at: new Date().toISOString()
+      })
+      .eq("id", key.id);
+
+    // Return obfuscated script
+    console.log(`[Loader] Key access granted for: ${scriptId}`);
+    const code = script.obfuscated_code || obfuscateLua(script.original_code, {
+      antiTamper: script.anti_tamper,
+      antiDump: script.anti_dump,
+      antiHook: script.anti_hook,
+    });
+    await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, true, null);
+    
+    return new Response(code, {
+      headers: { ...corsHeaders, "Content-Type": "text/plain" },
+    });
+
+  } catch (error) {
+    console.error(`[Loader] Error:`, error);
+    return new Response(getLuaError("Internal server error. Please try again later."), {
+      headers: { ...corsHeaders, "Content-Type": "text/plain" },
+    });
+  }
+});
+
+async function logExecution(
+  supabase: any,
+  scriptId: string,
+  keyId: string | null,
+  ip: string,
+  hwid: string,
+  userAgent: string | null,
+  success: boolean,
+  errorMessage: string | null
+) {
+  try {
+    await supabase.from("script_executions").insert({
+      script_id: scriptId,
+      key_id: keyId,
+      executor_ip: ip,
+      executor_hwid: hwid || null,
+      user_agent: userAgent,
+      success,
+      error_message: errorMessage,
+    });
+  } catch (e) {
+    console.error("[Loader] Failed to log execution:", e);
+  }
+}

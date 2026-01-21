@@ -14,16 +14,322 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      hwid_resets: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          id: string
+          key_id: string
+          new_hwid: string | null
+          old_hwid: string | null
+          requested_at: string
+          status: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          id?: string
+          key_id: string
+          new_hwid?: string | null
+          old_hwid?: string | null
+          requested_at?: string
+          status?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          id?: string
+          key_id?: string
+          new_hwid?: string | null
+          old_hwid?: string | null
+          requested_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hwid_resets_key_id_fkey"
+            columns: ["key_id"]
+            isOneToOne: false
+            referencedRelation: "script_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      script_executions: {
+        Row: {
+          error_message: string | null
+          executed_at: string
+          executor_hwid: string | null
+          executor_ip: string | null
+          id: string
+          key_id: string | null
+          script_id: string
+          success: boolean
+          user_agent: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          executed_at?: string
+          executor_hwid?: string | null
+          executor_ip?: string | null
+          id?: string
+          key_id?: string | null
+          script_id: string
+          success?: boolean
+          user_agent?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          executed_at?: string
+          executor_hwid?: string | null
+          executor_ip?: string | null
+          id?: string
+          key_id?: string | null
+          script_id?: string
+          success?: boolean
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_executions_key_id_fkey"
+            columns: ["key_id"]
+            isOneToOne: false
+            referencedRelation: "script_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "script_executions_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      script_keys: {
+        Row: {
+          created_at: string
+          current_uses: number
+          expires_at: string | null
+          hwid_lock_enabled: boolean
+          hwid_locked: string | null
+          id: string
+          is_active: boolean
+          is_premium: boolean
+          key_value: string
+          last_used_at: string | null
+          max_uses: number | null
+          script_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_uses?: number
+          expires_at?: string | null
+          hwid_lock_enabled?: boolean
+          hwid_locked?: string | null
+          id?: string
+          is_active?: boolean
+          is_premium?: boolean
+          key_value: string
+          last_used_at?: string | null
+          max_uses?: number | null
+          script_id: string
+        }
+        Update: {
+          created_at?: string
+          current_uses?: number
+          expires_at?: string | null
+          hwid_lock_enabled?: boolean
+          hwid_locked?: string | null
+          id?: string
+          is_active?: boolean
+          is_premium?: boolean
+          key_value?: string
+          last_used_at?: string | null
+          max_uses?: number | null
+          script_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_keys_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      script_whitelist: {
+        Row: {
+          created_at: string
+          id: string
+          identifier: string
+          identifier_type: Database["public"]["Enums"]["whitelist_type"]
+          is_active: boolean
+          note: string | null
+          script_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          identifier: string
+          identifier_type: Database["public"]["Enums"]["whitelist_type"]
+          is_active?: boolean
+          note?: string | null
+          script_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          identifier?: string
+          identifier_type?: Database["public"]["Enums"]["whitelist_type"]
+          is_active?: boolean
+          note?: string | null
+          script_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_whitelist_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scripts: {
+        Row: {
+          anti_dump: boolean
+          anti_hook: boolean
+          anti_tamper: boolean
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          is_premium: boolean
+          name: string
+          obfuscated_code: string | null
+          original_code: string
+          protection_mode: Database["public"]["Enums"]["protection_mode"]
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          anti_dump?: boolean
+          anti_hook?: boolean
+          anti_tamper?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_premium?: boolean
+          name: string
+          obfuscated_code?: string | null
+          original_code: string
+          protection_mode?: Database["public"]["Enums"]["protection_mode"]
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          anti_dump?: boolean
+          anti_hook?: boolean
+          anti_tamper?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_premium?: boolean
+          name?: string
+          obfuscated_code?: string | null
+          original_code?: string
+          protection_mode?: Database["public"]["Enums"]["protection_mode"]
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      user_blacklist: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          identifier: string
+          identifier_type: Database["public"]["Enums"]["whitelist_type"]
+          is_global: boolean
+          reason: string | null
+          script_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          identifier: string
+          identifier_type: Database["public"]["Enums"]["whitelist_type"]
+          is_global?: boolean
+          reason?: string | null
+          script_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          identifier?: string
+          identifier_type?: Database["public"]["Enums"]["whitelist_type"]
+          is_global?: boolean
+          reason?: string | null
+          script_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_blacklist_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      protection_mode: "key" | "whitelist" | "keyless"
+      whitelist_type: "roblox_id" | "username" | "hwid"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +456,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      protection_mode: ["key", "whitelist", "keyless"],
+      whitelist_type: ["roblox_id", "username", "hwid"],
+    },
   },
 } as const
