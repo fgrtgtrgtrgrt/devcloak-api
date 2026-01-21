@@ -93,8 +93,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2) obfuscate
-    const config = body.config ?? { MinifiyAll: true, Virtualize: true };
+    // 2) obfuscate - Use Roblox-compatible settings (NO Virtualize - it uses Lua 5.1 features not in Luau)
+    const defaultConfig = {
+      MinifiyAll: true,
+      // RewriteToLua51: true, // Ensure Lua 5.1 compatibility
+      CustomPlugins: {
+        // String encryption
+        EncryptStrings: [100],
+        // Control flow obfuscation  
+        ControlFlowFlattenV1AllBlocks: [80],
+        // Variable renaming
+        Minifier: true,
+        // Turn foo.bar into foo['bar'] (good with string encryption)
+        SwizzleLookups: [100],
+        // Mutate numeric literals
+        MutateAllLiterals: [60],
+        // Turn globals into _G['name'] lookups
+        MakeGlobalsLookups: true,
+        // Inject junk if statements
+        JunkifyAllIfStatements: [40],
+      }
+    };
+    const config = body.config ?? defaultConfig;
     const obfRes = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
       method: "POST",
       headers: {
