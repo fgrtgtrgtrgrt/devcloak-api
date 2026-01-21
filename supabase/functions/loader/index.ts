@@ -5,6 +5,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-script-key, x-hwid",
 };
 
+// Helper to create HTML response with proper headers
+function htmlResponse(html: string): Response {
+  return new Response(html, {
+    status: 200,
+    headers: new Headers({
+      "Access-Control-Allow-Origin": "*",
+      "Content-Type": "text/html; charset=utf-8",
+    }),
+  });
+}
+
+// Helper to create Lua/text response
+function luaResponse(code: string): Response {
+  return new Response(code, {
+    status: 200,
+    headers: new Headers({
+      ...corsHeaders,
+      "Content-Type": "text/plain; charset=utf-8",
+    }),
+  });
+}
+
 // Multi-layer Lua obfuscation - executor compatible
 function obfuscateLua(code: string, options: { antiTamper: boolean; antiDump: boolean; antiHook: boolean }): string {
   // Variable name obfuscation
@@ -247,13 +269,9 @@ Deno.serve(async (req) => {
   if (!scriptId || scriptId === "loader") {
     const userAgent = req.headers.get("user-agent");
     if (!isRobloxRequest(userAgent)) {
-      return new Response(getAccessDeniedHTML(), {
-        headers: { ...corsHeaders, "Content-Type": "text/html" },
-      });
+      return htmlResponse(getAccessDeniedHTML());
     }
-    return new Response(getLuaError("Invalid script ID"), {
-      headers: { ...corsHeaders, "Content-Type": "text/plain" },
-    });
+    return luaResponse(getLuaError("Invalid script ID"));
   }
 
   const userAgent = req.headers.get("user-agent");
@@ -263,13 +281,11 @@ Deno.serve(async (req) => {
 
   // If not from Roblox, show access denied page
   if (!isRobloxRequest(userAgent)) {
-    return new Response(getAccessDeniedHTML(), {
-      headers: { ...corsHeaders, "Content-Type": "text/html" },
-    });
+    return htmlResponse(getAccessDeniedHTML());
   }
 
   // Initialize Supabase client with service role for full access
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -287,9 +303,7 @@ Deno.serve(async (req) => {
     if (scriptError || !script) {
       console.log(`[Loader] Script not found: ${scriptId}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Script not found");
-      return new Response(getLuaError("Script not found or inactive"), {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(getLuaError("Script not found or inactive"));
     }
 
     // Check blacklist
@@ -303,9 +317,7 @@ Deno.serve(async (req) => {
     if (blacklisted && blacklisted.length > 0) {
       console.log(`[Loader] Blacklisted access attempt: ${hwid || clientIP}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Blacklisted");
-      return new Response(getLuaError("You have been blacklisted from this script"), {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(getLuaError("You have been blacklisted from this script"));
     }
 
     // Handle based on protection mode
@@ -314,9 +326,7 @@ Deno.serve(async (req) => {
       console.log(`[Loader] Keyless access granted for: ${scriptId}`);
       const code = getExecutableCode(script);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
-      return new Response(code, {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(code);
     }
 
     if (script.protection_mode === "whitelist") {
@@ -332,26 +342,20 @@ Deno.serve(async (req) => {
       if (!whitelisted || whitelisted.length === 0) {
         console.log(`[Loader] Whitelist check failed for: ${scriptId}`);
         await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Not whitelisted");
-        return new Response(getLuaError("You are not whitelisted for this script"), {
-          headers: { ...corsHeaders, "Content-Type": "text/plain" },
-        });
+        return luaResponse(getLuaError("You are not whitelisted for this script"));
       }
 
       console.log(`[Loader] Whitelist access granted for: ${scriptId}`);
       const code = getExecutableCode(script);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
-      return new Response(code, {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(code);
     }
 
     // Key-based protection
     if (!scriptKey || scriptKey === "KEYLESS") {
       console.log(`[Loader] Key required but not provided for: ${scriptId}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Key required");
-      return new Response(getLuaError("This script requires a valid key. Get your key at scripthub.dev"), {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(getLuaError("This script requires a valid key. Get your key at scripthub.dev"));
     }
 
     // Validate key
@@ -366,27 +370,21 @@ Deno.serve(async (req) => {
     if (keyError || !key) {
       console.log(`[Loader] Invalid key for: ${scriptId}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Invalid key");
-      return new Response(getLuaError("Invalid or inactive key"), {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(getLuaError("Invalid or inactive key"));
     }
 
     // Check expiration
     if (key.expires_at && new Date(key.expires_at) < new Date()) {
       console.log(`[Loader] Expired key for: ${scriptId}`);
       await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "Key expired");
-      return new Response(getLuaError("Your key has expired. Please renew at scripthub.dev"), {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(getLuaError("Your key has expired. Please renew at scripthub.dev"));
     }
 
     // Check max uses
     if (key.max_uses !== null && key.current_uses >= key.max_uses) {
       console.log(`[Loader] Max uses reached for key: ${key.id}`);
       await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "Max uses reached");
-      return new Response(getLuaError("This key has reached its maximum usage limit"), {
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
-      });
+      return luaResponse(getLuaError("This key has reached its maximum usage limit"));
     }
 
     // Check HWID lock
@@ -394,17 +392,13 @@ Deno.serve(async (req) => {
       if (!hwid) {
         console.log(`[Loader] HWID required but not provided`);
         await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "HWID required");
-        return new Response(getLuaError("HWID verification required. Please provide your HWID."), {
-          headers: { ...corsHeaders, "Content-Type": "text/plain" },
-        });
+        return luaResponse(getLuaError("HWID verification required. Please provide your HWID."));
       }
 
       if (key.hwid_locked && key.hwid_locked !== hwid) {
         console.log(`[Loader] HWID mismatch for key: ${key.id}`);
         await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "HWID mismatch");
-        return new Response(getLuaError("This key is locked to a different device. Request an HWID reset if needed."), {
-          headers: { ...corsHeaders, "Content-Type": "text/plain" },
-        });
+        return luaResponse(getLuaError("This key is locked to a different device. Request an HWID reset if needed."));
       }
 
       // Lock HWID if not already locked
@@ -431,15 +425,11 @@ Deno.serve(async (req) => {
     const code = getExecutableCode(script);
     await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, true, null);
     
-    return new Response(code, {
-      headers: { ...corsHeaders, "Content-Type": "text/plain" },
-    });
+    return luaResponse(code);
 
   } catch (error) {
     console.error(`[Loader] Error:`, error);
-    return new Response(getLuaError("Internal server error. Please try again later."), {
-      headers: { ...corsHeaders, "Content-Type": "text/plain" },
-    });
+    return luaResponse(getLuaError("Internal server error. Please try again later."));
   }
 });
 

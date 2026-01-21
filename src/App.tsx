@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Docs from "./pages/Docs";
+import Loader from "./pages/Loader";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
               }
             />
             <Route path="/docs" element={<Docs />} />
+            <Route path="/loader/:scriptId?" element={<Loader />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -8,14 +8,17 @@ interface ScriptLoaderProps {
 }
 
 export function ScriptLoader({ script }: ScriptLoaderProps) {
-  const loaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${script.id}`;
+  // Use Supabase edge function URL for actual loader (Roblox needs this)
+  const actualLoaderUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/loader/${script.id}`;
+  // Display friendly URL for users to share
+  const displayUrl = `${window.location.origin}/loader/${script.id}`;
 
   const copyLoader = () => {
     const keyPart = script.protection_mode === "key" 
       ? 'getgenv().SCRIPT_KEY = "YOUR_KEY_HERE"'
       : 'getgenv().SCRIPT_KEY = "KEYLESS"';
     const loader = `${keyPart}
-loadstring(game:HttpGet("${loaderUrl}"))()`;
+loadstring(game:HttpGet("${actualLoaderUrl}"))()`;
     navigator.clipboard.writeText(loader);
     toast.success("Loader copied to clipboard!");
   };
@@ -47,12 +50,15 @@ loadstring(game:HttpGet("${loaderUrl}"))()`;
           <span className="text-accent">game</span>:
           <span className="text-accent">HttpGet</span>(
           <span className="text-success text-[10px] break-all">
-            "{loaderUrl}"
+            "{actualLoaderUrl}"
           </span>
           ))()
         </code>
       </div>
-      <Button variant="outline" className="w-full mt-4" onClick={copyLoader}>
+      <p className="text-xs text-muted-foreground mt-3 mb-2">
+        Share this link: <a href={displayUrl} target="_blank" className="text-primary hover:underline">{displayUrl}</a>
+      </p>
+      <Button variant="outline" className="w-full mt-2" onClick={copyLoader}>
         <Copy className="w-4 h-4" />
         Copy Loader
       </Button>
