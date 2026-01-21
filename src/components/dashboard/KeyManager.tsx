@@ -75,10 +75,15 @@ export function KeyManager({ scriptId }: KeyManagerProps) {
   return (
     <div className="glass-card p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-foreground flex items-center gap-2">
-          <Key className="w-5 h-5 text-primary" />
-          Keys ({keys.length})
-        </h3>
+        <div>
+          <h3 className="font-semibold text-foreground flex items-center gap-2">
+            <Key className="w-5 h-5 text-primary" />
+            Keys ({keys.length})
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Keys generated here will only work for this script
+          </p>
+        </div>
         <Button size="sm" onClick={() => setShowNewKey(true)}>
           <Plus className="w-4 h-4" />
           Generate Key
