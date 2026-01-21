@@ -1,5 +1,4 @@
-// LuaObfuscator.com API integration - free obfuscation
-const LUAOBFUSCATOR_API = "https://api.luaobfuscator.com/v1/obfuscator";
+import { supabase } from "@/integrations/supabase/client";
 
 // Generate random variable name (for fallback)
 export function generateVarName(prefix = "_"): string {
@@ -17,84 +16,42 @@ interface ObfuscationResult {
   error?: string;
 }
 
-// Call LuaObfuscator.com API for professional obfuscation
+// Call our backend function (avoids browser CORS issues)
 export async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
   try {
-    // Step 1: Create a new session with the script
-    const sessionResponse = await fetch(`${LUAOBFUSCATOR_API}/newscript`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain",
-        "apikey": "test",
+    const { data, error } = await supabase.functions.invoke("obfuscate", {
+      body: {
+        code,
+        // Keep API-side config stable; only pass high-level intent from UI here if needed later.
+        config: {
+          MinifiyAll: true,
+          Virtualize: true,
+          CustomPlugins: {
+            EncryptStrings: [100],
+            ControlFlowFlattenV1AllBlocks: [80],
+            MakeGlobalsLookups: true,
+            SwizzleLookups: [100],
+            MutateAllLiterals: [80],
+            JunkifyAllIfStatements: [50],
+          },
+        },
       },
-      body: code,
     });
 
-    if (!sessionResponse.ok) {
-      console.error("[Obfuscator] Failed to create session:", sessionResponse.status);
-      return { success: false, code, error: "Failed to create obfuscation session" };
+    if (error) {
+      console.error("[Obfuscator] Backend invoke error:", error);
+      return { success: false, code, error: error.message };
     }
 
-    const sessionData = await sessionResponse.json();
-    
-    if (sessionData.message) {
-      console.error("[Obfuscator] Session error:", sessionData.message);
-      return { success: false, code, error: sessionData.message };
+    if (!data?.code || typeof data.code !== "string") {
+      console.error("[Obfuscator] Backend returned no code");
+      return { success: false, code, error: "Backend returned no code" };
     }
 
-    const sessionId = sessionData.sessionId;
-    if (!sessionId) {
-      console.error("[Obfuscator] No session ID returned");
-      return { success: false, code, error: "No session ID returned" };
-    }
-
-    // Step 2: Apply obfuscation with strong settings
-    const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": "test",
-        "sessionId": sessionId,
-      },
-      body: JSON.stringify({
-        // Variable/literal obfuscation
-        "MinifyAll": true,
-        "EncryptStrings": true,
-        
-        // Control flow obfuscation  
-        "Virtualize": true,
-        
-        // Additional protection layers
-        "ConstantArray": true,
-        "ProxifyLocals": true,
-        "PaidWatermark": false,
-        "ByteCodeMode": "Default",
-      }),
-    });
-
-    if (!obfuscateResponse.ok) {
-      console.error("[Obfuscator] Failed to obfuscate:", obfuscateResponse.status);
-      return { success: false, code, error: "Failed to apply obfuscation" };
-    }
-
-    const obfuscateData = await obfuscateResponse.json();
-
-    if (obfuscateData.message) {
-      console.error("[Obfuscator] Obfuscation error:", obfuscateData.message);
-      return { success: false, code, error: obfuscateData.message };
-    }
-
-    if (!obfuscateData.code) {
-      console.error("[Obfuscator] No obfuscated code returned");
-      return { success: false, code, error: "No obfuscated code returned" };
-    }
-
-    console.log("[Obfuscator] Successfully obfuscated script via LuaObfuscator.com API");
-    return { success: true, code: obfuscateData.code };
-
-  } catch (error) {
-    console.error("[Obfuscator] API error:", error);
-    return { success: false, code, error: String(error) };
+    return { success: true, code: data.code };
+  } catch (err) {
+    console.error("[Obfuscator] API error:", err);
+    return { success: false, code, error: String(err) };
   }
 }
 
