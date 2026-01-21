@@ -5,6 +5,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-script-key, x-hwid",
 };
 
+function redirectToLoaderPage(req: Request, scriptId?: string): Response {
+  const url = new URL(req.url);
+  const dest = scriptId ? `${url.origin}/loader/${scriptId}` : `${url.origin}/`;
+  return Response.redirect(dest, 302);
+}
+
 // Helper to create HTML response with proper headers for BROWSER rendering
 function htmlResponse(html: string, status: number = 403): Response {
   return new Response(html, {
@@ -271,7 +277,8 @@ Deno.serve(async (req) => {
   if (!scriptId || scriptId === "loader") {
     const userAgent = req.headers.get("user-agent");
     if (!isRobloxRequest(userAgent)) {
-      return htmlResponse(getAccessDeniedHTML());
+      // Browser: send to the real website page instead of returning raw HTML
+      return redirectToLoaderPage(req);
     }
     return luaResponse(getLuaError("Invalid script ID"));
   }
@@ -285,6 +292,32 @@ Deno.serve(async (req) => {
   // Handle HWID reporting/verification from embedded script
   if (action === "report" && hwid) {
     console.log(`[Loader] HWID reported: ${hwid} for script ${scriptId}`);
+    // Best-effort: backfill HWID into the most recent execution log for this script/IP.
+    // The initial loader request often can't include HWID (it's detected after download).
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      const { data: lastExec } = await supabase
+        .from("script_executions")
+        .select("id, executor_hwid")
+        .eq("script_id", scriptId)
+        .eq("executor_ip", clientIP)
+        .order("executed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastExec?.id && !lastExec.executor_hwid) {
+        await supabase
+          .from("script_executions")
+          .update({ executor_hwid: hwid })
+          .eq("id", lastExec.id);
+      }
+    } catch (e) {
+      console.error("[Loader] Failed to backfill HWID into execution log:", e);
+    }
+
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
@@ -333,7 +366,8 @@ Deno.serve(async (req) => {
 
   // If not from Roblox, show access denied page
   if (!isRobloxRequest(userAgent)) {
-    return htmlResponse(getAccessDeniedHTML());
+    // Browser: always route to the website's Loader page (renders Access Denied UI)
+    return redirectToLoaderPage(req, scriptId);
   }
 
   // Initialize Supabase client with service role for full access
