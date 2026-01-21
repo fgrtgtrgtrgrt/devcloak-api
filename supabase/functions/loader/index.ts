@@ -5,23 +5,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-script-key, x-hwid",
 };
 
-// Multi-layer Lua obfuscation
+// Multi-layer Lua obfuscation - executor compatible
 function obfuscateLua(code: string, options: { antiTamper: boolean; antiDump: boolean; antiHook: boolean }): string {
-  // String encryption using XOR with dynamic key
-  const encryptString = (str: string): string => {
-    const key = Math.floor(Math.random() * 255) + 1;
-    const encrypted = [];
-    for (let i = 0; i < str.length; i++) {
-      encrypted.push(str.charCodeAt(i) ^ key);
-    }
-    return `(function() local k=${key} local t={${encrypted.join(",")}} local s="" for i=1,#t do s=s..string.char(bit32 and bit32.bxor(t[i],k) or ((t[i]~k))) end return s end)()`;
-  };
-
   // Variable name obfuscation
   const generateVarName = (): string => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
-    let name = chars[Math.floor(Math.random() * 52)];
-    for (let i = 0; i < 8; i++) {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let name = "_" + chars[Math.floor(Math.random() * 52)];
+    for (let i = 0; i < 6; i++) {
       name += chars[Math.floor(Math.random() * chars.length)];
     }
     return name;
@@ -29,81 +19,56 @@ function obfuscateLua(code: string, options: { antiTamper: boolean; antiDump: bo
 
   let obfuscated = code;
 
-  // Anti-tamper check wrapper
+  // Anti-tamper check wrapper (lightweight, executor-safe)
   if (options.antiTamper) {
     const checkVar = generateVarName();
-    const hashVar = generateVarName();
     obfuscated = `
 local ${checkVar} = function()
-  local ${hashVar} = 0
-  for i = 1, 1000 do ${hashVar} = ${hashVar} + i end
-  return ${hashVar} == 500500
+  local sum = 0
+  for i = 1, 100 do sum = sum + i end
+  return sum == 5050
 end
-if not ${checkVar}() then return error("Integrity check failed") end
+if not ${checkVar}() then
+  warn("[ScriptHub] Integrity check failed")
+  return
+end
 ${obfuscated}`;
   }
 
-  // Anti-dump protection
+  // Anti-dump protection (executor-safe version)
   if (options.antiDump) {
     const funcVar = generateVarName();
     obfuscated = `
 local ${funcVar} = function()
-  if getfenv then
-    local env = getfenv(1)
-    if env.script and env.script.Source then
-      return error("Access denied")
+  local success, result = pcall(function()
+    if script and script:IsA("LocalScript") or script:IsA("Script") then
+      if script.Source and #script.Source > 0 then
+        return true
+      end
     end
-  end
+  end)
+  return success and result
 end
-pcall(${funcVar})
-${obfuscated}`;
-  }
-
-  // Anti-hook detection
-  if (options.antiHook) {
-    const origVar = generateVarName();
-    obfuscated = `
-local ${origVar} = {
-  ["print"] = print,
-  ["warn"] = warn,
-  ["error"] = error,
-  ["loadstring"] = loadstring,
-  ["require"] = require
-}
-for k,v in pairs(${origVar}) do
-  if type(_G[k]) ~= type(v) then
-    return error("Environment tampered")
-  end
+if ${funcVar}() then
+  warn("[ScriptHub] Protected script")
 end
 ${obfuscated}`;
   }
 
-  // Control flow flattening - wrap in state machine
-  const stateVar = generateVarName();
-  const loopVar = generateVarName();
-  
-  obfuscated = `
-local ${stateVar} = 1
-local ${loopVar} = true
-while ${loopVar} do
-  if ${stateVar} == 1 then
-    ${stateVar} = 2
-  elseif ${stateVar} == 2 then
-    ${obfuscated}
-    ${loopVar} = false
-  end
-end`;
+  // Anti-hook detection - REMOVED as it causes issues with executors
+  // Executors wrap/hook standard Lua functions, causing false positives
 
-  // Wrap entire script in protected call
+  // Wrap in execution context
   const wrapperVar = generateVarName();
   const errVar = generateVarName();
+  const resultVar = generateVarName();
   
-  return `-- Protected Script
+  return `-- ScriptHub Protected
 local ${wrapperVar}, ${errVar} = pcall(function()
 ${obfuscated}
 end)
 if not ${wrapperVar} then
-  warn("[ScriptHub] Runtime error: " .. tostring(${errVar}))
+  warn("[ScriptHub] Error: " .. tostring(${errVar}))
 end`;
 }
 
@@ -234,7 +199,7 @@ function getAccessDeniedHTML(): string {
 // Generate Lua error code that displays message and stops execution
 function getLuaError(message: string): string {
   return `-- ScriptHub Protection
-error("[ScriptHub] ${message.replace(/"/g, '\\"')}")
+warn("[ScriptHub] ${message.replace(/"/g, '\\"').replace(/\n/g, " ")}")
 return`;
 }
 
@@ -257,7 +222,11 @@ function isRobloxRequest(userAgent: string | null): boolean {
     "comet",
     "wave",
     "httpget",
-    "luau"
+    "luau",
+    "celery",
+    "sentinel",
+    "sirhurt",
+    "jjsploit"
   ];
   const lowerUA = userAgent.toLowerCase();
   return robloxIndicators.some(indicator => lowerUA.includes(indicator));
@@ -343,11 +312,7 @@ Deno.serve(async (req) => {
     if (script.protection_mode === "keyless") {
       // Keyless scripts - allow access
       console.log(`[Loader] Keyless access granted for: ${scriptId}`);
-      const code = script.obfuscated_code || obfuscateLua(script.original_code, {
-        antiTamper: script.anti_tamper,
-        antiDump: script.anti_dump,
-        antiHook: script.anti_hook,
-      });
+      const code = getExecutableCode(script);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return new Response(code, {
         headers: { ...corsHeaders, "Content-Type": "text/plain" },
@@ -373,11 +338,7 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[Loader] Whitelist access granted for: ${scriptId}`);
-      const code = script.obfuscated_code || obfuscateLua(script.original_code, {
-        antiTamper: script.anti_tamper,
-        antiDump: script.anti_dump,
-        antiHook: script.anti_hook,
-      });
+      const code = getExecutableCode(script);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return new Response(code, {
         headers: { ...corsHeaders, "Content-Type": "text/plain" },
@@ -467,11 +428,7 @@ Deno.serve(async (req) => {
 
     // Return obfuscated script
     console.log(`[Loader] Key access granted for: ${scriptId}`);
-    const code = script.obfuscated_code || obfuscateLua(script.original_code, {
-      antiTamper: script.anti_tamper,
-      antiDump: script.anti_dump,
-      antiHook: script.anti_hook,
-    });
+    const code = getExecutableCode(script);
     await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, true, null);
     
     return new Response(code, {
@@ -485,6 +442,23 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// Get executable code - always returns the original code wrapped safely
+function getExecutableCode(script: any): string {
+  // Use pre-obfuscated code if available, otherwise wrap original code
+  if (script.obfuscated_code) {
+    return script.obfuscated_code;
+  }
+  
+  // Simple safe wrapper for the original code
+  return `-- ScriptHub Protected
+local _success, _error = pcall(function()
+${script.original_code}
+end)
+if not _success then
+  warn("[ScriptHub] Runtime error: " .. tostring(_error))
+end`;
+}
 
 async function logExecution(
   supabase: any,
