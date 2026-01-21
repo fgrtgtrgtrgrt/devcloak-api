@@ -511,8 +511,9 @@ Deno.serve(async (req) => {
       return luaResponse(getLuaError("You have been blacklisted from this script"));
     }
 
-    // Build the loader URL for HWID reporting
-    const loaderUrl = `${url.origin}${url.pathname}`;
+    // Build the loader URL for HWID reporting - use the public Supabase URL
+    const supabasePublicUrl = Deno.env.get("SUPABASE_URL")!;
+    const loaderUrl = `${supabasePublicUrl}/functions/v1/loader/${scriptId}`;
 
     // Handle based on protection mode
     if (script.protection_mode === "keyless") {
