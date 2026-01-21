@@ -659,83 +659,14 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
     }
   }
 
-  // Build HWID verification code for key-protected scripts with HWID lock
-  let hwidVerification = "";
-  if (keyOptions?.hwidLockEnabled && keyOptions?.keyValue) {
-    hwidVerification = `
--- HWID verification (embedded)
-local ${verifyVar} = nil
-pcall(function()
-  local ${resultVar} = __vd_http_request({
-    Url = "${loaderUrl}?hwid=" .. ${hwidVar} .. "&key=${keyOptions.keyValue}&action=verify",
-    Method = "GET"
-  })
-  ${verifyVar} = (${resultVar} and (${resultVar}.Body or ${resultVar}.body))
-end)
-if ${verifyVar} == "locked" then
-  warn("[ScriptHub] This key is locked to a different device")
-  return
-elseif ${verifyVar} == "invalid" then
-  warn("[ScriptHub] Invalid key")
-  return
-end
-`;
-  }
-
-  // Embed HWID detection directly into the script - hidden among obfuscated variable names
-  // NOTE: In Roblox executors, HttpService:RequestAsync is often unavailable (nil) or blocked.
-  // We route network calls through common executor request APIs when available.
-  const wrapperCode = `-- ScriptHub Protected
-local ${gameVar} = game
-local ${httpVar} = ${gameVar}:GetService("HttpService")
-local ${playerVar} = ${gameVar}:GetService("Players").LocalPlayer
-
- -- Executor-safe HTTP request helper
- local function __vd_http_request(opts)
-   local fn = nil
-   -- Synapse X / Script-Ware / most executors
-   if typeof(syn) == "table" and typeof(syn.request) == "function" then fn = syn.request end
-   -- Hydrogen / Delta / generic
-   if not fn and typeof(http_request) == "function" then fn = http_request end
-   if not fn and typeof(request) == "function" then fn = request end
-   if not fn and typeof(fluxus) == "table" and typeof(fluxus.request) == "function" then fn = fluxus.request end
-   if not fn and typeof(krnl) == "table" and typeof(krnl.request) == "function" then fn = krnl.request end
-   if not fn and typeof(_G) == "table" and typeof(_G.request) == "function" then fn = _G.request end
-
-   if not fn then return nil end
-
-   local ok, res = pcall(function()
-     return fn(opts)
-   end)
-   if ok then return res end
-   return nil
- end
-
--- Hardware identification (embedded)
-local ${hwidVar} = ""
-pcall(function()
-  ${hwidVar} = ${gameVar}:GetService("RbxAnalyticsService"):GetClientId()
-end)
-if ${hwidVar} == "" then
-  pcall(function()
-    ${hwidVar} = ${httpVar}:GenerateGUID(false)
-  end)
-end
-
- -- Report HWID silently (best-effort; server only needs query params)
- pcall(function()
-   __vd_http_request({
-     Url = "${loaderUrl}?hwid=" .. ${hwidVar} .. "&action=report",
-     Method = "GET"
-   })
- end)
-${hwidVerification}
--- Execute protected script
+  // Simplified wrapper - minimal code to avoid executor compatibility issues
+  // The script is already obfuscated, we just need to run it safely
+  const wrapperCode = `-- VizionDevelopments Protected
 local ${successVar}, ${errorVar} = pcall(function()
 ${scriptCode}
 end)
 if not ${successVar} then
-  warn("[ScriptHub] Runtime error: " .. tostring(${errorVar}))
+  warn("[VizionDevelopments] Runtime error: " .. tostring(${errorVar}))
 end`;
 
   return wrapperCode;
