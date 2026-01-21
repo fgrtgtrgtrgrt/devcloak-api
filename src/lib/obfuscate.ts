@@ -22,17 +22,17 @@ export async function obfuscateWithAPI(code: string): Promise<ObfuscationResult>
     const { data, error } = await supabase.functions.invoke("obfuscate", {
       body: {
         code,
-        // Roblox-compatible config (NO Virtualize - uses Lua 5.1 features not in Luau)
+        // Strong but Roblox-compatible config
+        // NO Virtualize (Lua 5.1 bytecode breaks Luau)
+        // NO MakeGlobalsLookups (breaks _G access)
         config: {
           MinifiyAll: true,
           CustomPlugins: {
-            EncryptStrings: [100],
-            ControlFlowFlattenV1AllBlocks: [80],
+            EncryptStrings: [90],
+            ControlFlowFlattenV1AllBlocks: [50],
             Minifier: true,
-            SwizzleLookups: [100],
-            MutateAllLiterals: [60],
-            MakeGlobalsLookups: true,
-            JunkifyAllIfStatements: [40],
+            SwizzleLookups: [90],
+            MutateAllLiterals: [30],
           },
         },
       },
