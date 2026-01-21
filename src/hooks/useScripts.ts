@@ -104,11 +104,17 @@ export function useScripts() {
     }
 
     try {
-      const obfuscated = await obfuscateLuaAsync(code, {
+      const obfuscationResult = await obfuscateLuaAsync(code, {
         antiTamper: options.antiTamper ?? true,
         antiDump: options.antiDump ?? true,
         antiHook: options.antiHook ?? true,
       });
+
+      // Check if obfuscation failed (fallback code contains the marker)
+      if (obfuscationResult.includes("-- ScriptHub Protected (Fallback)")) {
+        toast.error("Obfuscation failed. Please contact a developer.");
+        return null;
+      }
 
       const { data, error } = await supabase
         .from("scripts")
@@ -116,7 +122,7 @@ export function useScripts() {
           user_id: user.id,
           name,
           original_code: code,
-          obfuscated_code: obfuscated,
+          obfuscated_code: obfuscationResult,
           protection_mode: protectionMode,
           anti_tamper: options.antiTamper ?? true,
           anti_dump: options.antiDump ?? true,
@@ -132,7 +138,7 @@ export function useScripts() {
       return data as Script;
     } catch (error: any) {
       console.error("Error creating script:", error);
-      toast.error("Failed to create script");
+      toast.error("Obfuscation failed. Please contact a developer.");
       return null;
     }
   };
@@ -149,11 +155,19 @@ export function useScripts() {
         const script = scripts.find(s => s.id === id);
         if (script) {
           const code = updates.original_code || script.original_code;
-          finalUpdates.obfuscated_code = await obfuscateLuaAsync(code, {
+          const obfuscationResult = await obfuscateLuaAsync(code, {
             antiTamper: updates.anti_tamper ?? script.anti_tamper,
             antiDump: updates.anti_dump ?? script.anti_dump,
             antiHook: updates.anti_hook ?? script.anti_hook,
           });
+
+          // Check if obfuscation failed
+          if (obfuscationResult.includes("-- ScriptHub Protected (Fallback)")) {
+            toast.error("Obfuscation failed. Please contact a developer.");
+            return false;
+          }
+
+          finalUpdates.obfuscated_code = obfuscationResult;
           finalUpdates.version = script.version + 1;
         }
       }
