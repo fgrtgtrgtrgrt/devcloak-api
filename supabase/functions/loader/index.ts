@@ -83,9 +83,14 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
 
     console.log("[Obfuscator] Session created, applying obfuscation...");
 
-    // Step 2: Apply MINIMAL obfuscation - only variable renaming for maximum compatibility
-    // Complex scripts break with ControlFlowFlatten, EncryptStrings, etc.
-    // Variable renaming alone still makes the code hard to read/understand
+    // Step 2: Apply AGGRESSIVE obfuscation - Luau-safe settings only
+    // ✅ EncryptStrings - XOR-encrypts all strings (prevents easy extraction)
+    // ✅ SwizzleLookups - converts foo.bar to foo["bar"] (harder to read)
+    // ✅ Minifier - renames all variables to v0, v1, etc.
+    // ✅ MutateAllLiterals - changes number literals
+    // ❌ NO Virtualize - generates Lua 5.1 bytecode incompatible with Luau
+    // ❌ NO ControlFlowFlatten - breaks complex scripts with many conditions
+    // ❌ NO MakeGlobalsLookups - breaks _G/shared access in some executors
     const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
       method: "POST",
       headers: {
@@ -96,7 +101,14 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
       body: JSON.stringify({
         "MinifiyAll": true,
         "CustomPlugins": {
-          "Minifier": true
+          // Strong string encryption - prevents easy extraction
+          "EncryptStrings": [80],
+          // Variable/function renaming
+          "Minifier": true,
+          // Property access obfuscation (foo.bar -> foo["bar"])
+          "SwizzleLookups": [80],
+          // Literal mutation - changes numbers
+          "MutateAllLiterals": [50]
         }
       }),
     });
@@ -659,19 +671,6 @@ interface KeyOptions {
 }
 
 async function getExecutableCode(script: any, loaderUrl: string, scriptId: string, keyOptions?: KeyOptions, supabase?: any): Promise<string> {
-  // Generate random variable names for wrapper
-  const generateVarName = (): string => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    let name = "_" + chars[Math.floor(Math.random() * 52)];
-    for (let i = 0; i < 6; i++) {
-      name += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return name;
-  };
-
-  const successVar = generateVarName();
-  const errorVar = generateVarName();
-
   // Get the original code
   const originalCode = script.original_code;
   
@@ -682,7 +681,6 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
   let scriptCode: string;
   
   // If we already have cached output, always prefer it.
-  // (Our minimal obfuscation can be smaller than the original due to minification.)
   if (script.obfuscated_code && typeof script.obfuscated_code === "string" && script.obfuscated_code.trim()) {
     console.log("[Loader] Using cached obfuscated code, length:", script.obfuscated_code.length);
     scriptCode = script.obfuscated_code;
@@ -713,21 +711,31 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
           }
         }
       } else {
-        // IMPORTANT: For compatibility, do NOT apply local obfuscation on large real-world scripts.
-        // It can easily break behavior (e.g., if the script relies on certain identifier names).
-        // Instead, fall back to original code.
+        // Fallback to original code if API fails
         console.warn("[Loader] API obfuscation failed; serving original code un-obfuscated");
         scriptCode = originalCode;
       }
     }
   }
 
-  // Return script directly without pcall wrapper (it can break some scripts)
-  // The localObfuscate function already adds the header comment
-  if (scriptCode.startsWith("-- VizionDevelopments")) {
-    return scriptCode;
-  }
-  return `-- VizionDevelopments Protected\n${scriptCode}`;
+  // Generate random variable names for pcall wrapper
+  const chars = "abcdefghijklmnopqrstuvwxyz";
+  const randName = () => {
+    let n = "_";
+    for (let i = 0; i < 6; i++) n += chars[Math.floor(Math.random() * 26)];
+    return n;
+  };
+  const wrapSuccessVar = randName();
+  const wrapErrorVar = randName();
+
+  // Wrap in pcall for error handling
+  return `-- VizionDevelopments Protected
+local ${wrapSuccessVar}, ${wrapErrorVar} = pcall(function()
+${scriptCode}
+end)
+if not ${wrapSuccessVar} then
+  warn("[VizionDevelopments] Runtime error: " .. tostring(${wrapErrorVar}))
+end`;
 }
 
 async function logExecution(
