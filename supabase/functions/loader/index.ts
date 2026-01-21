@@ -389,10 +389,34 @@ Deno.serve(async (req) => {
   }
 
   const userAgent = req.headers.get("user-agent");
-  const scriptKey = url.searchParams.get("key") || "";
-  const hwid = url.searchParams.get("hwid") || "";
+  const rawScriptKey = url.searchParams.get("key") || "";
+  const rawHwid = url.searchParams.get("hwid") || "";
   const action = url.searchParams.get("action") || "";
-  const clientIP = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
+  const rawClientIP = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
+
+  // Input validation to prevent PostgREST operator injection
+  // HWID format: alphanumeric and hyphens only
+  const isValidHwid = (val: string): boolean => !val || /^[a-zA-Z0-9-]+$/.test(val);
+  // Client IP format: numbers, dots, colons (IPv4/IPv6)
+  const isValidIP = (val: string): boolean => val === "unknown" || /^[0-9a-fA-F.:]+$/.test(val);
+  // Script key format: alphanumeric and hyphens only
+  const isValidKey = (val: string): boolean => !val || /^[A-Za-z0-9-_]+$/.test(val);
+
+  // Sanitize inputs - reject invalid formats
+  const hwid = isValidHwid(rawHwid) ? rawHwid : "";
+  const clientIP = isValidIP(rawClientIP) ? rawClientIP : "unknown";
+  const scriptKey = isValidKey(rawScriptKey) ? rawScriptKey : "";
+
+  // Log invalid input attempts
+  if (rawHwid && !isValidHwid(rawHwid)) {
+    console.warn(`[Loader] Invalid HWID format rejected: ${rawHwid.substring(0, 20)}...`);
+  }
+  if (rawClientIP && !isValidIP(rawClientIP)) {
+    console.warn(`[Loader] Invalid IP format rejected: ${rawClientIP.substring(0, 20)}...`);
+  }
+  if (rawScriptKey && !isValidKey(rawScriptKey)) {
+    console.warn(`[Loader] Invalid key format rejected: ${rawScriptKey.substring(0, 20)}...`);
+  }
 
   // Handle HWID reporting/verification from embedded script
   if (action === "report" && hwid) {
@@ -494,7 +518,7 @@ Deno.serve(async (req) => {
     if (scriptError || !script) {
       console.log(`[Loader] Script not found: ${scriptId}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Script not found");
-      return luaResponse(getLuaError("Script not found or inactive"));
+      return luaResponse(getLuaError("Access denied"));
     }
 
     // Check blacklist
@@ -508,7 +532,7 @@ Deno.serve(async (req) => {
     if (blacklisted && blacklisted.length > 0) {
       console.log(`[Loader] Blacklisted access attempt: ${hwid || clientIP}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Blacklisted");
-      return luaResponse(getLuaError("You have been blacklisted from this script"));
+      return luaResponse(getLuaError("Access denied"));
     }
 
     // Build the loader URL for HWID reporting - use the public Supabase URL
@@ -537,7 +561,7 @@ Deno.serve(async (req) => {
       if (!whitelisted || whitelisted.length === 0) {
         console.log(`[Loader] Whitelist check failed for: ${scriptId}`);
         await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Not whitelisted");
-        return luaResponse(getLuaError("You are not whitelisted for this script"));
+        return luaResponse(getLuaError("Access denied"));
       }
 
       console.log(`[Loader] Whitelist access granted for: ${scriptId}`);
@@ -550,7 +574,7 @@ Deno.serve(async (req) => {
     if (!scriptKey || scriptKey === "KEYLESS") {
       console.log(`[Loader] Key required but not provided for: ${scriptId}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Key required");
-      return luaResponse(getLuaError("This script requires a valid key. Get your key at scripthub.dev"));
+      return luaResponse(getLuaError("Access denied"));
     }
 
     // Validate key
@@ -565,21 +589,21 @@ Deno.serve(async (req) => {
     if (keyError || !key) {
       console.log(`[Loader] Invalid key for: ${scriptId}`);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, false, "Invalid key");
-      return luaResponse(getLuaError("Invalid or inactive key"));
+      return luaResponse(getLuaError("Access denied"));
     }
 
     // Check expiration
     if (key.expires_at && new Date(key.expires_at) < new Date()) {
       console.log(`[Loader] Expired key for: ${scriptId}`);
       await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "Key expired");
-      return luaResponse(getLuaError("Your key has expired. Please renew at scripthub.dev"));
+      return luaResponse(getLuaError("Access denied"));
     }
 
     // Check max uses
     if (key.max_uses !== null && key.current_uses >= key.max_uses) {
       console.log(`[Loader] Max uses reached for key: ${key.id}`);
       await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, false, "Max uses reached");
-      return luaResponse(getLuaError("This key has reached its maximum usage limit"));
+      return luaResponse(getLuaError("Access denied"));
     }
 
     // HWID lock is now handled in the embedded script - skip server-side check
