@@ -83,14 +83,9 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
 
     console.log("[Obfuscator] Session created, applying obfuscation...");
 
-    // Step 2: Apply STRONG but Roblox-compatible obfuscation
-    // These settings provide real protection against loadstring hooks while staying Luau-safe:
-    // ✅ EncryptStrings - XOR-encrypts all strings (prevents easy string extraction)
-    // ✅ SwizzleLookups - converts foo.bar to foo["bar"] (harder to read)
-    // ✅ ControlFlowFlatten - scrambles code flow (moderate level to avoid breaking complex scripts)
-    // ✅ Minifier - renames all variables to v0, v1, etc.
-    // ❌ NO Virtualize - generates Lua 5.1 bytecode incompatible with Luau
-    // ❌ NO MakeGlobalsLookups - breaks _G/shared access in some executors
+    // Step 2: Apply MINIMAL obfuscation - only variable renaming for maximum compatibility
+    // Complex scripts break with ControlFlowFlatten, EncryptStrings, etc.
+    // Variable renaming alone still makes the code hard to read/understand
     const obfuscateResponse = await fetch(`${LUAOBFUSCATOR_API}/obfuscate`, {
       method: "POST",
       headers: {
@@ -100,22 +95,8 @@ async function obfuscateWithAPI(code: string): Promise<ObfuscationResult> {
       },
       body: JSON.stringify({
         "MinifiyAll": true,
-        
         "CustomPlugins": {
-          // Strong string encryption - prevents easy extraction
-          "EncryptStrings": [90],
-          
-          // Control flow obfuscation - moderate level for compatibility
-          "ControlFlowFlattenV1AllBlocks": [50],
-          
-          // Variable/function renaming
-          "Minifier": true,
-          
-          // Property access obfuscation
-          "SwizzleLookups": [90],
-          
-          // Literal mutation - low level for safety
-          "MutateAllLiterals": [30]
+          "Minifier": true
         }
       }),
     });
