@@ -539,7 +539,7 @@ Deno.serve(async (req) => {
     if (script.protection_mode === "keyless") {
       // Keyless scripts - allow access
       console.log(`[Loader] Keyless access granted for: ${scriptId}`);
-      const code = await getExecutableCode(script, loaderUrl, scriptId);
+      const code = await getExecutableCode(script, loaderUrl, scriptId, undefined, supabase);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return luaResponse(code);
     }
@@ -561,7 +561,7 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[Loader] Whitelist access granted for: ${scriptId}`);
-      const code = await getExecutableCode(script, loaderUrl, scriptId);
+      const code = await getExecutableCode(script, loaderUrl, scriptId, undefined, supabase);
       await logExecution(supabase, scriptId, null, clientIP, hwid, userAgent, true, null);
       return luaResponse(code);
     }
@@ -619,7 +619,7 @@ Deno.serve(async (req) => {
     const code = await getExecutableCode(script, loaderUrl, scriptId, {
       keyValue: scriptKey,
       hwidLockEnabled: key.hwid_lock_enabled
-    });
+    }, supabase);
     await logExecution(supabase, scriptId, key.id, clientIP, hwid, userAgent, true, null);
     
     return luaResponse(code);
@@ -636,8 +636,8 @@ interface KeyOptions {
   hwidLockEnabled?: boolean;
 }
 
-async function getExecutableCode(script: any, loaderUrl: string, scriptId: string, keyOptions?: KeyOptions): Promise<string> {
-  // Generate random variable names to hide the HWID detection
+async function getExecutableCode(script: any, loaderUrl: string, scriptId: string, keyOptions?: KeyOptions, supabase?: any): Promise<string> {
+  // Generate random variable names for wrapper
   const generateVarName = (): string => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let name = "_" + chars[Math.floor(Math.random() * 52)];
@@ -647,36 +647,52 @@ async function getExecutableCode(script: any, loaderUrl: string, scriptId: strin
     return name;
   };
 
-  const hwidVar = generateVarName();
-  const httpVar = generateVarName();
-  const gameVar = generateVarName();
-  const playerVar = generateVarName();
   const successVar = generateVarName();
   const errorVar = generateVarName();
-  const verifyVar = generateVarName();
-  const resultVar = generateVarName();
 
-  // Get the original code and obfuscate it on-the-fly for strong protection
+  // Get the original code
   const originalCode = script.original_code;
   
   if (!originalCode || typeof originalCode !== "string" || !originalCode.trim()) {
     return getLuaError("Script is missing code");
   }
   
-  // Always obfuscate on delivery to prevent loadstring hook interception
-  console.log("[Loader] Obfuscating script via LuaObfuscator.com API...");
   let scriptCode: string;
-  const obfResult = await obfuscateWithAPI(originalCode);
-  if (obfResult.success) {
-    scriptCode = obfResult.code;
-    console.log("[Loader] Obfuscation successful, output length:", scriptCode.length);
+  
+  // Check if we have cached obfuscated code (and it's not from old aggressive settings)
+  // We use a simple heuristic: if obfuscated_code exists and is longer than original, use it
+  if (script.obfuscated_code && typeof script.obfuscated_code === "string" && 
+      script.obfuscated_code.length > originalCode.length) {
+    console.log("[Loader] Using cached obfuscated code, length:", script.obfuscated_code.length);
+    scriptCode = script.obfuscated_code;
   } else {
-    console.log("[Loader] API obfuscation failed, using local fallback");
-    scriptCode = localObfuscate(originalCode);
+    // Obfuscate via API
+    console.log("[Loader] Obfuscating script via LuaObfuscator.com API...");
+    const obfResult = await obfuscateWithAPI(originalCode);
+    
+    if (obfResult.success) {
+      scriptCode = obfResult.code;
+      console.log("[Loader] Obfuscation successful, output length:", scriptCode.length);
+      
+      // Cache the obfuscated code in database for future requests (avoids rate limiting)
+      if (supabase) {
+        try {
+          await supabase
+            .from("scripts")
+            .update({ obfuscated_code: scriptCode })
+            .eq("id", scriptId);
+          console.log("[Loader] Cached obfuscated code to database");
+        } catch (e) {
+          console.error("[Loader] Failed to cache obfuscated code:", e);
+        }
+      }
+    } else {
+      console.log("[Loader] API obfuscation failed, using local fallback");
+      scriptCode = localObfuscate(originalCode);
+    }
   }
 
-  // Simplified wrapper - minimal code to avoid executor compatibility issues
-  // The script is already obfuscated, we just need to run it safely
+  // Simple wrapper for error handling
   const wrapperCode = `-- VizionDevelopments Protected
 local ${successVar}, ${errorVar} = pcall(function()
 ${scriptCode}
