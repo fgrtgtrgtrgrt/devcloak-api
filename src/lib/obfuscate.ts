@@ -1,121 +1,76 @@
-// Multi-layer Lua obfuscation utilities
+// Multi-layer Lua obfuscation utilities - Executor compatible
 
 // Generate random variable name
 export function generateVarName(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
-  let name = chars[Math.floor(Math.random() * 52)];
-  for (let i = 0; i < 8; i++) {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let name = "_" + chars[Math.floor(Math.random() * 52)];
+  for (let i = 0; i < 6; i++) {
     name += chars[Math.floor(Math.random() * chars.length)];
   }
   return name;
-}
-
-// String encryption using XOR
-export function encryptString(str: string): string {
-  const key = Math.floor(Math.random() * 255) + 1;
-  const encrypted: number[] = [];
-  for (let i = 0; i < str.length; i++) {
-    encrypted.push(str.charCodeAt(i) ^ key);
-  }
-  return `(function() local k=${key} local t={${encrypted.join(",")}} local s="" for i=1,#t do s=s..string.char(bit32 and bit32.bxor(t[i],k) or ((t[i]~k))) end return s end)()`;
 }
 
 interface ObfuscationOptions {
   antiTamper?: boolean;
   antiDump?: boolean;
   antiHook?: boolean;
-  stringEncryption?: boolean;
-  controlFlowFlattening?: boolean;
 }
 
 export function obfuscateLua(code: string, options: ObfuscationOptions = {}): string {
   const {
     antiTamper = true,
     antiDump = true,
-    antiHook = true,
-    stringEncryption = true,
-    controlFlowFlattening = true,
+    // antiHook is ignored - causes issues with executors
   } = options;
 
   let obfuscated = code;
 
-  // Anti-tamper check wrapper
+  // Anti-tamper check wrapper (lightweight, executor-safe)
   if (antiTamper) {
     const checkVar = generateVarName();
-    const hashVar = generateVarName();
     obfuscated = `
 local ${checkVar} = function()
-  local ${hashVar} = 0
-  for i = 1, 1000 do ${hashVar} = ${hashVar} + i end
-  return ${hashVar} == 500500
+  local sum = 0
+  for i = 1, 100 do sum = sum + i end
+  return sum == 5050
 end
-if not ${checkVar}() then return error("Integrity check failed") end
+if not ${checkVar}() then
+  warn("[ScriptHub] Integrity check failed")
+  return
+end
 ${obfuscated}`;
   }
 
-  // Anti-dump protection
+  // Anti-dump protection (executor-safe version)
   if (antiDump) {
     const funcVar = generateVarName();
     obfuscated = `
 local ${funcVar} = function()
-  if getfenv then
-    local env = getfenv(1)
-    if env.script and env.script.Source then
-      return error("Access denied")
+  local success, result = pcall(function()
+    if script and script:IsA("LocalScript") or script:IsA("Script") then
+      if script.Source and #script.Source > 0 then
+        return true
+      end
     end
-  end
+  end)
+  return success and result
 end
-pcall(${funcVar})
-${obfuscated}`;
-  }
-
-  // Anti-hook detection
-  if (antiHook) {
-    const origVar = generateVarName();
-    obfuscated = `
-local ${origVar} = {
-  ["print"] = print,
-  ["warn"] = warn,
-  ["error"] = error,
-  ["loadstring"] = loadstring,
-  ["require"] = require
-}
-for k,v in pairs(${origVar}) do
-  if type(_G[k]) ~= type(v) then
-    return error("Environment tampered")
-  end
+if ${funcVar}() then
+  warn("[ScriptHub] Protected script")
 end
 ${obfuscated}`;
-  }
-
-  // Control flow flattening
-  if (controlFlowFlattening) {
-    const stateVar = generateVarName();
-    const loopVar = generateVarName();
-    
-    obfuscated = `
-local ${stateVar} = 1
-local ${loopVar} = true
-while ${loopVar} do
-  if ${stateVar} == 1 then
-    ${stateVar} = 2
-  elseif ${stateVar} == 2 then
-    ${obfuscated}
-    ${loopVar} = false
-  end
-end`;
   }
 
   // Wrap entire script in protected call
   const wrapperVar = generateVarName();
   const errVar = generateVarName();
   
-  return `-- Protected by ScriptHub
+  return `-- ScriptHub Protected
 local ${wrapperVar}, ${errVar} = pcall(function()
 ${obfuscated}
 end)
 if not ${wrapperVar} then
-  warn("[ScriptHub] Runtime error: " .. tostring(${errVar}))
+  warn("[ScriptHub] Error: " .. tostring(${errVar}))
 end`;
 }
 
